@@ -28,3 +28,28 @@ export function playerScore(expeditions) {
   }
   return { perColor, total };
 }
+
+/** 탐험대 하나의 점수 내역. total은 scoring.expeditionScore와 같다. */
+export function expeditionBreakdown(cards) {
+  let sum = 0;
+  let wagers = 0;
+  for (const c of cards) {
+    if (isWager(c)) wagers++;
+    else sum += cardValue(c);
+  }
+  const started = cards.length > 0;
+  const multiplier = wagers + 1;
+  const base = started ? sum - EXPEDITION_COST : 0;
+  const bonus = cards.length >= BONUS_MIN_CARDS ? BONUS : 0;
+  return {
+    started,
+    count: cards.length,
+    sum,
+    wagers,
+    cost: started ? -EXPEDITION_COST : 0,
+    base,
+    multiplier,
+    bonus,
+    total: started ? base * multiplier + bonus : 0,
+  };
+}

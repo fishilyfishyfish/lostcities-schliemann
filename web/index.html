@@ -22,6 +22,7 @@
         <option value="random">랜덤</option>
       </select>
     </label>
+    <button id="btn-analysis" class="btn small" type="button" aria-pressed="false">분석</button>
     <button id="btn-new" class="btn small" type="button">새 게임</button>
   </header>
 
@@ -50,6 +51,30 @@
   <section class="hand" id="hand" aria-label="내 손패"></section>
 
   <div class="known" id="known"></div>
+
+  <section class="analysis" id="analysis" hidden aria-label="분석">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="moves">수 분석</button>
+      <button type="button" role="tab" data-tab="tracker">카드 추적</button>
+      <button type="button" role="tab" data-tab="score">점수 내역</button>
+    </div>
+    <div class="tab-body" id="tab-moves" role="tabpanel">
+      <div class="analysis-head">
+        <button class="btn primary small" id="btn-analyze" type="button">이 국면 분석</button>
+        <span class="muted" id="analysis-status"></span>
+      </div>
+      <table class="moves-table" id="moves-table"></table>
+      <p class="note">기대 점수 차 = 라운드 끝 (내 점수 − AI 점수)의 추정. ±는 표준오차. MCTS가 규칙 봇 평가 상위 8수를 탐색한다. 행을 누르면 그 수가 선택된다.</p>
+    </div>
+    <div class="tab-body" id="tab-tracker" role="tabpanel" hidden>
+      <div class="muted" id="tracker-summary"></div>
+      <table class="tracker" id="tracker-table"></table>
+      <div class="legend" id="tracker-legend"></div>
+    </div>
+    <div class="tab-body" id="tab-score" role="tabpanel" hidden>
+      <table class="breakdown" id="breakdown-table"></table>
+    </div>
+  </section>
 </div>
 
 <div class="overlay" id="overlay" hidden>

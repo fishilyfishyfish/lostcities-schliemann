@@ -11,3 +11,4 @@ export { createRuleAgent, RULE_DEFAULTS } from './agents/rule.js';
 export { AGENTS } from './agents/index.js';
 export { mirrorMatch, meanCI, pairDeck, formatMatch } from './eval.js';
 // 탐색용 결정화/시뮬레이션은 engine/sim.js에서 직접 import (관측 객체에서 만든 가상 상태만 다룸).
+export { cardTracker, expeditionBreakdown, scoreBreakdown, analyzeMoves, CARD_STATUS } from './analysis.js';

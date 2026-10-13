@@ -47,6 +47,7 @@ class Node {
     this.children = new Map();
     this.n = 0;
     this.w = 0; // 루트 플레이어 시점 보상 합
+    this.w2 = 0; // 보상 제곱 합 (분석용 표준오차)
     this.avail = 0;
     this.prior = null;
   }
@@ -139,10 +140,12 @@ export function createMctsAgent(seed = 1, params = {}) {
     if (P.bias > 0 || P.topK > 0) attachPriors(root, obs, legalMoves);
     const deadline = P.timeMs > 0 ? now() + P.timeMs : Infinity;
     let it = 0;
+    let baseSum = 0;
     for (; it < P.iterations; it++) {
       if ((it & 15) === 0 && now() > deadline) break;
       const s = determinize(obs, rng);
       const base = P.baseline ? evaluateState(s, me) : 0;
+      baseSum += base;
       let node = root;
       let grew = false;
       let depth = 0;
@@ -205,14 +208,42 @@ export function createMctsAgent(seed = 1, params = {}) {
       for (let x = node; x; x = x.parent) {
         x.n++;
         x.w += reward;
+        x.w2 += reward * reward;
       }
     }
-    return { root, iterations: it };
+    return { root, iterations: it, baseMean: it ? baseSum / it : 0 };
+  }
+
+  /**
+   * 국면 분석: 합법수마다 기대 점수 차(내 최종 − 상대 최종) 추정.
+   * 기대값 = 루트 평가 평균 + 그 수 아래 보상 평균 × scale (보상에서 루트 평가를 뺐으므로 다시 더함).
+   * 탐색하지 않은 수(topK 밖)는 expected: null. 방문 수 내림차순 정렬.
+   * @returns {{ iterations, moves: { move, visits, expected, se }[] }}
+   */
+  function analyze(obs, legalMoves) {
+    const { root, iterations, baseMean } = search(obs, legalMoves);
+    const moves = legalMoves.map((m) => {
+      const play = root.children.get(playKey(m.card, m.target));
+      const node = play && play.children.get(drawKey(m.draw));
+      const n = node ? node.n : 0;
+      if (!n) return { move: m, visits: 0, expected: null, se: null };
+      const mean = node.w / n;
+      const variance = n > 1 ? Math.max(0, (node.w2 - n * mean * mean) / (n - 1)) : NaN;
+      return {
+        move: m,
+        visits: n,
+        expected: baseMean + mean * P.scale,
+        se: n > 1 ? (Math.sqrt(variance / n) * P.scale) : null,
+      };
+    });
+    moves.sort((a, b) => b.visits - a.visits || (b.expected ?? -Infinity) - (a.expected ?? -Infinity));
+    return { iterations, moves };
   }
 
   return {
     name: 'mcts',
     params: P,
+    analyze,
     /** 마지막 탐색 통계 (디버그/분석용). */
     lastStats: null,
     chooseMove(obs, legalMoves) {

@@ -1,5 +1,5 @@
 // 엔진은 이 워커 안에서만 돈다. 메인 스레드는 사람(player 0)의 관측 객체와 합법수만 받는다.
-import { Game, legalMovesFromObservation, randomSeed } from '../engine/index.js';
+import { Game, legalMovesFromObservation, randomSeed, cardTracker, analyzeMoves } from '../engine/index.js';
 import { agentFactory } from '../engine/agents/index.js';
 
 // 웹에서 고를 수 있는 AI.
@@ -12,6 +12,7 @@ const WEB_AIS = {
 const HUMAN = 0;
 const AI = 1;
 const AI_DELAY_MS = 700;
+const ANALYSIS_MS = 1500;
 
 let game = null;
 let ai = null;
@@ -20,7 +21,14 @@ let seed = 0;
 
 function send() {
   const obs = game.observe(HUMAN);
-  const msg = { type: 'update', seed, obs, legalMoves: legalMovesFromObservation(obs), final: null };
+  const msg = {
+    type: 'update',
+    seed,
+    obs,
+    legalMoves: legalMovesFromObservation(obs),
+    tracker: cardTracker(obs),
+    final: null,
+  };
   if (game.over) {
     const s = game.scores();
     msg.final = { scores: [s[HUMAN], s[AI]], aiHand: game.revealHands()[AI] };
@@ -55,6 +63,12 @@ self.onmessage = (e) => {
       ai = agentFactory(WEB_AIS[msg.ai] ?? WEB_AIS.mcts)(seed ^ 0x9e3779b9);
       send();
       scheduleAi();
+    } else if (msg.type === 'analyze') {
+      // 사람 시점 관측 객체만으로 분석한다
+      if (!game || game.over || game.current !== HUMAN) throw new Error('analysis is only available on your turn');
+      const obs = game.observe(HUMAN);
+      const result = analyzeMoves(obs, { timeMs: ANALYSIS_MS, seed: seed ^ obs.turn });
+      postMessage({ type: 'analysis', turn: obs.turn, result });
     } else if (msg.type === 'move') {
       if (!game || game.over || game.current !== HUMAN) throw new Error('not your turn');
       game.play(msg.move);
