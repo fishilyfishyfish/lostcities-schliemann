@@ -48,7 +48,7 @@ function newGame() {
   ui.selected = null;
   ui.pending = null;
   ui.final = null;
-  worker.postMessage({ type: 'new' });
+  worker.postMessage({ type: 'new', ai: $('ai-select').value });
 }
 
 // ---------- 표기 ----------
@@ -318,6 +318,12 @@ function showResult() {
 }
 
 $('btn-new').onclick = newGame;
+$('ai-select').onchange = newGame;
+try {
+  const saved = localStorage.getItem('lc-ai');
+  if (saved && [...$('ai-select').options].some((o) => o.value === saved)) $('ai-select').value = saved;
+} catch {}
+$('ai-select').addEventListener('change', () => { try { localStorage.setItem('lc-ai', $('ai-select').value); } catch {} });
 $('btn-again').onclick = newGame;
 $('btn-close').onclick = () => { $('overlay').hidden = true; };
 

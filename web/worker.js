@@ -1,5 +1,5 @@
 // 엔진은 이 워커 안에서만 돈다. 메인 스레드는 사람(player 0)의 관측 객체와 합법수만 받는다.
-import { Game, createRandomAgent, legalMovesFromObservation, randomSeed } from '../engine/index.js';
+import { AGENTS, Game, legalMovesFromObservation, randomSeed } from '../engine/index.js';
 
 const HUMAN = 0;
 const AI = 1;
@@ -39,7 +39,8 @@ self.onmessage = (e) => {
       seed = Number.isInteger(msg.seed) ? msg.seed >>> 0 : randomSeed();
       const startingPlayer = msg.startingPlayer ?? (Math.random() < 0.5 ? HUMAN : AI);
       game = new Game({ seed, startingPlayer });
-      ai = createRandomAgent(seed ^ 0x9e3779b9);
+      const make = AGENTS[msg.ai] ?? AGENTS.rule;
+      ai = make(seed ^ 0x9e3779b9);
       send();
       scheduleAi();
     } else if (msg.type === 'move') {

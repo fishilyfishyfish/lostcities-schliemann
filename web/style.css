@@ -57,11 +57,22 @@ button { font: inherit; color: inherit; }
 .btn:disabled { opacity: 0.4; cursor: default; }
 
 .topbar {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 12px;
 }
 .title { font-weight: 700; letter-spacing: 0.02em; }
+.ai-pick { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+.ai-pick select {
+  min-height: 38px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid #4d6457;
+  background: #2f4539;
+  color: var(--ink);
+  font: inherit;
+}
 .totals { margin-left: auto; display: flex; gap: 14px; color: var(--muted); font-size: 15px; }
 .totals b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
