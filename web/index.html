@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d2a24">
+<title>Lost Cities</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="title">Lost Cities</div>
+    <div class="totals">
+      <span>나 <b id="total-me">0</b></span>
+      <span>AI <b id="total-ai">0</b></span>
+    </div>
+    <button id="btn-new" class="btn small" type="button">새 게임</button>
+  </header>
+
+  <section class="side opp" aria-label="AI 탐험대">
+    <div class="side-label">AI <span id="opp-hand-count"></span></div>
+    <div class="expeditions" id="opp-exps"></div>
+  </section>
+
+  <section class="middle" aria-label="버림 더미와 덱">
+    <div class="piles" id="piles"></div>
+    <button class="deck" id="deck" type="button" aria-label="덱">
+      <span class="deck-count" id="deck-count">44</span>
+      <span class="deck-label">덱</span>
+    </button>
+  </section>
+
+  <section class="side me" aria-label="내 탐험대">
+    <div class="expeditions" id="my-exps"></div>
+  </section>
+
+  <div class="status">
+    <div id="message" class="message" aria-live="polite"></div>
+    <div class="actions" id="actions"></div>
+  </div>
+
+  <section class="hand" id="hand" aria-label="내 손패"></section>
+
+  <div class="known" id="known"></div>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="panel">
+    <h2 id="result-title"></h2>
+    <table class="result" id="result-table"></table>
+    <div class="reveal"><div class="reveal-label">AI 남은 손패</div><div class="mini-row" id="ai-hand"></div></div>
+    <div class="panel-actions">
+      <button class="btn" id="btn-close" type="button">판 보기</button>
+      <button class="btn primary" id="btn-again" type="button">새 게임</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

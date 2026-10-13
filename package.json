@@ -1,0 +1,12 @@
+{
+  "name": "lostcities-schliemann",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "selfplay": "node scripts/selfplay.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,275 @@
+:root {
+  --bg: #1d2a24;
+  --felt: #24362d;
+  --ink: #eef2ee;
+  --muted: #a9b8ae;
+  --accent: #f3c94b;
+  --danger: #ff8a7a;
+  --ok: #8fe3a3;
+
+  --yellow: #e9c23a;
+  --blue: #3c7fd6;
+  --white: #f2f0e8;
+  --green: #3fa45b;
+  --red: #d8463d;
+
+  /* 카드 크기: 폭 8장 + 여백이 화면에 들어가고, 세로로 탐험대 두 줄이 대략 들어가도록 */
+  --cw: clamp(40px, min(10.5vw, 6.9vh), 80px);
+  --ch: calc(var(--cw) * 1.42);
+  --peek: calc(var(--ch) * 0.27);
+  --gap: clamp(4px, 1.2vw, 10px);
+  --radius: calc(var(--cw) * 0.12);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-height: 100dvh;
+}
+
+button { font: inherit; color: inherit; }
+
+.btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #4d6457;
+  background: #2f4539;
+  cursor: pointer;
+}
+.btn.small { min-height: 38px; padding: 0 12px; font-size: 14px; }
+.btn.primary { background: var(--accent); color: #2a2205; border-color: var(--accent); font-weight: 600; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.title { font-weight: 700; letter-spacing: 0.02em; }
+.totals { margin-left: auto; display: flex; gap: 14px; color: var(--muted); font-size: 15px; }
+.totals b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ---------- 카드 ---------- */
+.card {
+  position: relative;
+  width: var(--cw);
+  height: var(--ch);
+  border-radius: var(--radius);
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-weight: 800;
+  user-select: none;
+  flex: none;
+}
+.card .v {
+  position: absolute;
+  top: calc(var(--ch) * 0.04);
+  left: calc(var(--cw) * 0.1);
+  font-size: calc(var(--cw) * 0.34);
+  line-height: 1;
+}
+.card .v2 {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--cw) * 0.5);
+  opacity: 0.9;
+}
+.card.wager .v, .card.wager .v2 { font-size: calc(var(--cw) * 0.3); }
+.card.wager .v2 { font-size: calc(var(--cw) * 0.45); }
+.c-yellow { background: var(--yellow); color: #3a2c00; }
+.c-blue { background: var(--blue); }
+.c-white { background: var(--white); color: #333; }
+.c-green { background: var(--green); }
+.c-red { background: var(--red); }
+
+.card.ghost { outline: 3px dashed var(--accent); outline-offset: 1px; opacity: 0.85; }
+.card.last { outline: 3px solid #fff; outline-offset: 1px; }
+.card.selected { transform: translateY(calc(var(--ch) * -0.18)); outline: 3px solid var(--accent); outline-offset: 1px; }
+
+.card.mini {
+  --cw: 30px;
+  --ch: 42px;
+}
+
+.slot {
+  width: var(--cw);
+  height: var(--ch);
+  border-radius: var(--radius);
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+}
+
+/* ---------- 탐험대 ---------- */
+.side { background: var(--felt); border-radius: 12px; padding: 6px var(--gap); }
+.side-label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.expeditions {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--gap);
+}
+.exp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+  padding: 4px 0;
+}
+.side.opp .exp-score { order: -1; }
+.stack { display: flex; flex-direction: column; align-items: center; min-height: var(--ch); }
+.side.opp .stack { flex: 1; }
+.stack .card + .card { margin-top: calc(var(--peek) - var(--ch)); }
+.side.opp .stack { justify-content: flex-end; }
+.exp.target { background: rgba(243, 201, 75, 0.22); box-shadow: inset 0 0 0 2px var(--accent); cursor: pointer; }
+.exp-score { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); min-height: 16px; }
+.exp-score.neg { color: var(--danger); }
+.exp-score.pos { color: var(--ok); }
+
+/* ---------- 가운데: 버림 더미 + 덱 ---------- */
+.middle {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0 var(--gap);
+}
+.piles {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--gap);
+}
+.pile {
+  position: relative;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  min-height: 44px;
+}
+.pile:disabled { cursor: default; }
+.pile .slot { border-color: rgba(255, 255, 255, 0.25); }
+.pile.p-yellow .slot { border-color: var(--yellow); }
+.pile.p-blue .slot { border-color: var(--blue); }
+.pile.p-white .slot { border-color: var(--white); }
+.pile.p-green .slot { border-color: var(--green); }
+.pile.p-red .slot { border-color: var(--red); }
+.pile .count {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  min-width: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  font-size: 12px;
+}
+.pile.drawable, .pile.target { background: rgba(243, 201, 75, 0.22); box-shadow: inset 0 0 0 2px var(--accent); cursor: pointer; }
+
+.deck {
+  width: calc(var(--cw) * 1.1);
+  height: var(--ch);
+  border-radius: var(--radius);
+  border: 2px solid #3d5247;
+  background: repeating-linear-gradient(45deg, #34493e 0 6px, #2c3f35 6px 12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.deck-count { font-size: calc(var(--cw) * 0.4); font-weight: 800; font-variant-numeric: tabular-nums; }
+.deck-label { font-size: 12px; color: var(--muted); }
+.deck.drawable { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(243, 201, 75, 0.45); cursor: pointer; }
+.deck:disabled { cursor: default; }
+
+/* ---------- 상태줄 ---------- */
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+}
+.message { flex: 1 1 260px; font-size: 15px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- 손패 ---------- */
+.hand {
+  display: flex;
+  justify-content: center;
+  gap: calc(var(--gap) * 0.6);
+  padding-top: calc(var(--ch) * 0.2);
+}
+.hand-card {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.hand-card:disabled { cursor: default; }
+.hand-card:disabled .card { filter: saturate(0.75) brightness(0.85); }
+
+.known { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.mini-row { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ---------- 결과 ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.overlay[hidden] { display: none; }
+.panel {
+  background: #22332a;
+  border-radius: 14px;
+  padding: 18px;
+  width: min(560px, 100%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.panel h2 { margin: 0 0 12px; }
+.result { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.result th, .result td { padding: 6px 4px; text-align: center; border-bottom: 1px solid #36493e; }
+.result .h-yellow { color: var(--yellow); }
+.result .h-blue { color: #79a9ec; }
+.result .h-white { color: var(--white); }
+.result .h-green { color: #6ccd85; }
+.result .h-red { color: #f07a72; }
+.reveal { margin-top: 14px; }
+.reveal-label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.panel-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* 가로 태블릿: 세로 공간이 좁으므로 겹침을 줄인다 */
+@media (orientation: landscape) and (max-height: 820px) {
+  :root { --peek: calc(var(--ch) * 0.24); }
+  .side-label { display: none; }
+}
+
+@media (hover: hover) {
+  .hand-card:not(:disabled):hover .card:not(.selected) { transform: translateY(-4px); }
+  .btn:not(:disabled):hover { filter: brightness(1.1); }
+}
