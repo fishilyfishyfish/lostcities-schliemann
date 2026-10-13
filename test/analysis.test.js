@@ -5,7 +5,8 @@ import { applyMove, legalMoves, newRound, DECK, DISCARD, EXPEDITION } from '../e
 import { observe, legalMovesFromObservation } from '../engine/observation.js';
 import { expeditionScore } from '../engine/scoring.js';
 import { mulberry32 } from '../engine/rng.js';
-import { analyzeMoves, cardTracker, expeditionBreakdown, scoreBreakdown, CARD_STATUS } from '../engine/analysis.js';
+import { analyzeMoves, cardTracker, compareMoves, expeditionBreakdown, scoreBreakdown, CARD_STATUS } from '../engine/analysis.js';
+import { createMctsAgent } from '../engine/agents/mcts.js';
 
 function randomPosition(seed, n) {
   const s = newRound({ seed, startingPlayer: seed % 2 });
@@ -104,4 +105,39 @@ test('수 분석: 점수가 확실히 오르는 수를 최선으로 봄', () => 
   assert.equal(best.move.target, EXPEDITION);
   const discardR10 = r.moves.find((m) => m.move.card === C(R, 10) && m.move.target === DISCARD && m.expected !== null);
   if (discardR10) assert.ok(best.expected > discardR10.expected + 5);
+});
+
+test('수읽기 비교: 색별 항목의 합 = 기대 점수 차이', () => {
+  for (const seed of [2, 9, 13]) {
+    const s = randomPosition(seed, 24);
+    if (s.over) continue;
+    const obs = observe(s, s.current);
+    const agent = createMctsAgent(seed, { iterations: 3000, topK: 4 });
+    const { moves } = agent.analyze(obs, legalMovesFromObservation(obs));
+    const searched = moves.filter((m) => m.expected !== null && m.colorEffect);
+    for (let i = 1; i < searched.length; i++) {
+      const a = searched[0], b = searched[i];
+      const { terms, total, rest, pros, cons } = compareMoves(a, b);
+      const sum = terms.reduce((t, x) => t + x.value, 0);
+      assert.ok(Math.abs(sum - (a.expected - b.expected)) < 1e-6, `${sum} vs ${a.expected - b.expected}`);
+      assert.ok(Math.abs(total - sum) < 1e-9);
+      // 보여준 항목 + 나머지 = 합계
+      const shown = terms.filter((t) => [...pros, ...cons].some((x) => x.startsWith(t.text))).reduce((x, t) => x + t.value, 0);
+      assert.ok(Math.abs(shown + rest - total) < 1e-6);
+    }
+  }
+});
+
+test('분석 결과: 1위는 2위와, 나머지는 1위와 비교한 장단점이 있음', () => {
+  const s = randomPosition(7, 30);
+  const obs = observe(s, s.current);
+  const r = analyzeMoves(obs, { timeMs: 0, iterations: 3000, topK: 5 });
+  const ranked = r.moves.filter((m) => m.rank);
+  assert.equal(ranked[0].rank, 1);
+  for (const m of ranked) {
+    assert.ok(m.versus, `rank ${m.rank}`);
+    assert.equal(m.versus.rank, m.rank === 1 ? 2 : 1);
+    assert.ok(m.gap >= 0);
+  }
+  assert.ok(r.position && r.weights);
 });

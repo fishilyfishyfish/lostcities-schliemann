@@ -63,8 +63,8 @@
         <button class="btn primary small" id="btn-analyze" type="button">이 국면 분석</button>
         <span class="muted" id="analysis-status"></span>
       </div>
-      <table class="moves-table" id="moves-table"></table>
-      <p class="note">기대 점수 차 = 라운드 끝 (내 점수 − AI 점수)의 추정. ±는 표준오차. MCTS가 규칙 봇 평가 상위 8수를 탐색한다. 행을 누르면 그 수가 선택된다.</p>
+      <div id="moves-table"></div>
+      <p class="note">순위는 수읽기(MCTS: 상대 손패를 관측과 모순 없이 여러 번 샘플링해 몇 수 앞까지 둬 본 결과) 기준. "비슷함"은 1.5점 이내라 어느 쪽을 둬도 큰 차이가 없다는 뜻. "이 수가 하는 일"은 정적 평가(위의 예상 최종 점수 계산)로 낸 것이고, "차이"는 수읽기 결과를 색별로 나눈 것이라 항목을 더하면 점수 차와 같다.</p>
     </div>
     <div class="tab-body" id="tab-tracker" role="tabpanel" hidden>
       <div class="muted" id="tracker-summary"></div>

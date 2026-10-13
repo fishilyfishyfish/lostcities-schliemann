@@ -10,6 +10,7 @@ import { NUM_COLORS, cardColor } from './cards.js';
 import { canPlace } from './rules.js';
 import { colorValue, giftValue, RULE_DEFAULTS } from './agents/rule.js';
 import { totalScore } from './sim.js';
+import { expeditionScore } from './scoring.js';
 
 export const EVAL_DEFAULTS = Object.freeze({
   handWeight: RULE_DEFAULTS.handWeight,
@@ -20,7 +21,7 @@ export const EVAL_DEFAULTS = Object.freeze({
 const deckBy = Array.from({ length: NUM_COLORS }, () => []);
 const handBy = Array.from({ length: NUM_COLORS }, () => []);
 
-function playerValue(s, p, P) {
+function playerValue(s, p, P, out = null, offset = 0) {
   const D = s.deck.length;
   const turns = s.current === p ? Math.ceil(D / 2) : Math.floor(D / 2);
   const hand = s.hands[p];
@@ -37,15 +38,32 @@ function playerValue(s, p, P) {
     q: D ? Math.min(1, (P.drawShare * Math.max(0, turns - 1)) / D) : 0,
   };
   let v = 0;
-  for (let c = 0; c < NUM_COLORS; c++) v += colorValue(exps[c], handBy[c], deckBy[c], ctx);
+  for (let c = 0; c < NUM_COLORS; c++) {
+    const x = colorValue(exps[c], handBy[c], deckBy[c], ctx);
+    if (out) out[offset + c] = x;
+    v += x;
+  }
   return v;
 }
 
-export function evaluateState(s, me, P = EVAL_DEFAULTS) {
-  if (s.over) return totalScore(s.expeditions[me]) - totalScore(s.expeditions[1 - me]);
+/** out 배열 배치: [0..4] 나의 색별 값, [5..9] 상대의 색별 값, [10] 버림 더미 위험 항(내 시점 부호). 합 = evaluateState. */
+export const COLOR_SLOTS = 11;
+
+export function evaluateState(s, me, P = EVAL_DEFAULTS, out = null) {
+  if (s.over) {
+    if (out) {
+      for (let c = 0; c < NUM_COLORS; c++) {
+        out[c] = expeditionScore(s.expeditions[me][c]);
+        out[NUM_COLORS + c] = expeditionScore(s.expeditions[1 - me][c]);
+      }
+      out[2 * NUM_COLORS] = 0;
+    }
+    return totalScore(s.expeditions[me]) - totalScore(s.expeditions[1 - me]);
+  }
   for (let c = 0; c < NUM_COLORS; c++) deckBy[c].length = 0;
   for (let i = 0; i < s.deck.length; i++) deckBy[cardColor(s.deck[i])].push(s.deck[i]);
-  let v = playerValue(s, me, P) - playerValue(s, 1 - me, P);
+  let v = playerValue(s, me, P, out, 0) - playerValue(s, 1 - me, P, out, NUM_COLORS);
+  if (out) out[2 * NUM_COLORS] = 0;
   // 버림 더미 맨 위: 다음 차례 플레이어가 가져갈 수 있다
   if (P.giftWeight) {
     const next = s.current;
@@ -54,7 +72,9 @@ export function evaluateState(s, me, P = EVAL_DEFAULTS) {
       const pile = s.discards[c];
       if (pile.length) g += giftValue(pile[pile.length - 1], s.expeditions[next][c], RULE_DEFAULTS);
     }
-    v += (next === me ? 1 : -1) * P.giftWeight * g;
+    const term = (next === me ? 1 : -1) * P.giftWeight * g;
+    if (out) out[2 * NUM_COLORS] = term;
+    v += term;
   }
   return v;
 }

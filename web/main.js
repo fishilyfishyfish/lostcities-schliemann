@@ -23,6 +23,7 @@ const ui = {
   analysis: null, // { turn, result } 수 분석 결과
   analyzing: false,
   suggestedDraw: null, // 분석 행을 눌렀을 때 추천 뽑기
+  expanded: null, // 수 분석 후보 중 펼친 행
   tab: 'moves',
 };
 
@@ -45,7 +46,10 @@ worker.onmessage = (e) => {
     if (ui.final) showResult();
   } else if (msg.type === 'analysis') {
     ui.analyzing = false;
-    if (ui.obs && msg.turn === ui.obs.turn) ui.analysis = { turn: msg.turn, result: msg.result };
+    if (ui.obs && msg.turn === ui.obs.turn) {
+      ui.analysis = { turn: msg.turn, result: msg.result };
+      ui.expanded = null;
+    }
     render();
   } else if (msg.type === 'error') {
     ui.error = msg.message;
@@ -378,11 +382,6 @@ function setTab(tab) {
   render();
 }
 
-function moveLabel(m) {
-  const what = m.target === EXPEDITION ? '놓기' : '버리기';
-  const from = m.draw === DECK ? '덱' : `${COLOR_NAMES[m.draw]} 더미`;
-  return `${what} · ${from}`;
-}
 
 function renderAnalysis() {
   if ($('analysis').hidden || !ui.obs) return;
@@ -397,41 +396,142 @@ function renderAnalysis() {
   else renderScoreTab();
 }
 
+const CONF_TEXT = { similar: '비슷함', slight: '근소', clear: '뚜렷' };
+
+function moveText(m) {
+  const what = m.target === EXPEDITION ? '탐험대에 놓기' : '버리기';
+  const from = m.draw === DECK ? '덱에서 뽑기' : `${COLOR_NAMES[m.draw]} 더미에서 뽑기`;
+  return `${cardName(m.card)} ${what} → ${from}`;
+}
+
+const r1 = (x) => Math.round(x * 10) / 10;
+const sign = (x) => fmtScore(r1(x));
+
+function pickMove(m) {
+  if (!myTurn()) return;
+  ui.selected = null;
+  ui.pending = { card: m.card, target: m.target };
+  ui.suggestedDraw = m.draw;
+  render();
+}
+
 function renderMovesTab() {
   const btn = $('btn-analyze');
   btn.disabled = !myTurn() || ui.analyzing;
+  const a = ui.analysis && ui.analysis.turn === ui.obs.turn ? ui.analysis.result : null;
   $('analysis-status').textContent = ui.analyzing
     ? '분석 중… (약 1.5초)'
     : !myTurn() ? '내 차례에 분석할 수 있다'
-    : ui.analysis ? `${ui.analysis.result.iterations.toLocaleString()}회 반복` : '';
-  const table = $('moves-table');
-  table.replaceChildren();
-  if (!ui.analysis || ui.analysis.turn !== ui.obs.turn) return;
-  const rows = ui.analysis.result.moves.filter((m) => m.expected !== null).slice(0, 8);
-  const head = document.createElement('tr');
-  head.innerHTML = '<th>#</th><th>카드</th><th>수</th><th>기대 점수 차</th><th>방문</th>';
-  table.append(head);
-  rows.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.className = 'move-row';
-    tr.tabIndex = 0;
-    const cardTd = document.createElement('td');
-    cardTd.append(cardEl(r.move.card, 'mini'));
-    tr.innerHTML = `<td>${i + 1}</td>`;
-    tr.append(cardTd);
-    tr.insertAdjacentHTML('beforeend',
-      `<td>${moveLabel(r.move)}</td><td class="num">${fmtScore(Math.round(r.expected * 10) / 10)}${r.se !== null ? ` <span class="muted">±${r.se.toFixed(1)}</span>` : ''}</td><td class="num muted">${r.visits}</td>`);
-    const pick = () => {
-      if (!myTurn()) return;
-      ui.selected = null;
-      ui.pending = { card: r.move.card, target: r.move.target };
-      ui.suggestedDraw = r.move.draw;
-      render();
-    };
-    tr.onclick = pick;
-    tr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
-    table.append(tr);
+    : a ? `수읽기 ${a.iterations.toLocaleString()}회` : '';
+  const box = $('moves-table');
+  box.replaceChildren();
+  if (!a || !a.position) return;
+
+  // --- 국면 요약: 현재 점수 → 예상 최종 점수 ---
+  const pos = a.position;
+  const summary = document.createElement('div');
+  summary.className = 'pos-summary';
+  const diffNow = pos.current[0] - pos.current[1];
+  const diffExp = pos.projected[0] - pos.projected[1];
+  summary.innerHTML = `
+    <div class="pos-line"><span class="muted">지금 점수</span> 나 <b>${sign(pos.current[0])}</b> · AI <b>${sign(pos.current[1])}</b> <span class="muted">(차 ${sign(diffNow)})</span></div>
+    <div class="pos-line"><span class="muted">예상 최종</span> 나 <b>${sign(pos.projected[0])}</b> · AI <b>${sign(pos.projected[1])}</b> <span class="muted">(차 ${sign(diffExp)})</span></div>
+    <table class="proj">
+      <tr><th></th>${COLOR_NAMES.map((n, i) => `<th class="h-${COLOR_KEYS[i]}">${n}</th>`).join('')}</tr>
+      <tr><th>나</th>${pos.me.map((p) => `<td>${projCell(p)}</td>`).join('')}</tr>
+      <tr><th>AI</th>${pos.opp.map((p) => `<td>${projCell(p)}</td>`).join('')}</tr>
+    </table>
+    <p class="note">예상 최종 = 놓인 카드 + 손패 중 이어 놓을 수 있는 카드 × ${Math.round(a.weights.hand * 100)}% + 아직 안 나온 카드 중 이어 놓을 수 있는 카드 × ${Math.round(a.weights.unseen * 100)}%(내가 뽑아 쓸 몫)로 (합 − 20) × 배수 + 보너스를 계산한 것. 시작 안 한 색은 손해면 시작하지 않는다고 보고 0. AI는 AI가 가져간 카드와, 안 나온 카드 × ${Math.round(a.weights.aiUnseen * 100)}%로 계산. 덱 ${pos.deckCount}장 · 내 남은 차례 약 ${pos.myTurns}번 · 지금 놓을 수 있는 손패 ${pos.planned}장.</p>`;
+  box.append(summary);
+
+  const searched = a.moves.filter((m) => m.expected !== null);
+  if (!searched.length) return;
+
+  // --- 추천 ---
+  const best = searched[0];
+  const second = searched[1];
+  const rec = document.createElement('div');
+  rec.className = 'recommend';
+  const conf = !second ? ''
+    : best.confidence === 'similar' ? `${r1(second.gap) === 0 ? '2위와 거의 같음' : `2위와 ${r1(second.gap)}점 차`} · 비슷함: 2위 수를 둬도 손해가 거의 없다`
+    : `2위와 ${r1(second.gap)}점 차 · ${CONF_TEXT[best.confidence]}`;
+  rec.innerHTML = `<div class="rec-title">추천: ${moveText(best.move)}</div>
+    <div class="muted">${conf}</div>
+    <div class="sub">이 수가 하는 일</div>
+    <ul class="reasons">${best.reasons.map((r) => `<li class="r-${r.kind}">${r.text}</li>`).join('')}</ul>
+    ${versusHtml(best, searched)}`;
+  const recBtn = document.createElement('button');
+  recBtn.className = 'btn small primary';
+  recBtn.type = 'button';
+  recBtn.textContent = '이 수 선택';
+  recBtn.disabled = !myTurn();
+  recBtn.onclick = () => pickMove(best.move);
+  rec.append(recBtn);
+  box.append(rec);
+
+  // --- 후보 목록 ---
+  const head = document.createElement('div');
+  head.className = 'cand-head muted';
+  head.textContent = `후보 ${searched.length}수 (규칙 평가 상위 수를 수읽기로 비교). 누르면 근거를 펼친다.`;
+  box.append(head);
+  searched.forEach((m, i) => {
+    const row = document.createElement('div');
+    row.className = `cand ${ui.expanded === i ? 'open' : ''}`;
+    const line = document.createElement('button');
+    line.type = 'button';
+    line.className = 'cand-line';
+    line.append(cardEl(m.move.card, 'mini'));
+    line.insertAdjacentHTML('beforeend', `<span class="cand-rank">${i + 1}</span><span class="cand-text">${moveText(m.move)}</span>
+      <span class="cand-gap">${i === 0 ? '최선' : r1(m.gap) === 0 ? '≈0' : `−${r1(m.gap)}`}</span>
+      <span class="badge b-${m.confidence}">${i === 0 ? (second ? CONF_TEXT[m.confidence] : '') : CONF_TEXT[m.confidence]}</span>`);
+    line.onclick = () => { ui.expanded = ui.expanded === i ? null : i; render(); };
+    row.append(line);
+    if (ui.expanded === i) {
+      const d = document.createElement('div');
+      d.className = 'cand-detail';
+      const eff = m.effects;
+      const staticNote = m.staticRank === i + 1
+        ? `정적 평가로도 ${m.staticRank}위.`
+        : `정적 평가로는 ${m.staticRank}위${m.staticGap > 0.05 ? ` (1위보다 ${r1(m.staticGap)}점 낮음)` : ''}인데, 상대 응수와 종반까지 수읽기한 결과 ${i + 1}위.`;
+      d.innerHTML = `<div class="sub">이 수가 하는 일</div>
+        <ul class="reasons">${m.reasons.map((r) => `<li class="r-${r.kind}">${r.text}</li>`).join('')}</ul>
+        ${i > 0 ? versusHtml(m, searched) : ''}
+        <div class="effects">이 수의 효과: 놓기·버리기 <b>${sign(eff.play)}</b> · 뽑기 <b>${sign(eff.draw)}</b> · AI에게 줄 위험 <b>${sign(eff.gift)}</b> = <b>${sign(eff.total)}</b></div>
+        <div class="muted">${staticNote} 수읽기 기대 점수 차(라운드 끝 내 점수 − AI 점수) ${sign(m.expected)}.</div>`;
+      const b = document.createElement('button');
+      b.className = 'btn small';
+      b.type = 'button';
+      b.textContent = '이 수 선택';
+      b.disabled = !myTurn();
+      b.onclick = () => pickMove(m.move);
+      d.append(b);
+      row.append(d);
+    }
+    box.append(row);
   });
+}
+
+/** 수읽기 비교 (색별 예상 변화의 차이). 1위는 2위와, 나머지는 1위와. */
+function versusHtml(m, searched) {
+  const v = m.versus;
+  if (!v || (!v.pros.length && !v.cons.length)) return '';
+  const other = searched[v.rank - 1];
+  const title = v.rank === 2
+    ? `수읽기로 본 2위(${moveText(other.move)})와의 차이`
+    : `수읽기로 본 1위(${moveText(other.move)})와의 차이`;
+  const total = `${v.total >= 0 ? '+' : '−'}${Math.abs(r1(v.total))}`;
+  const rest = Math.abs(v.rest) >= 0.05 ? `<li class="rest">그 밖의 작은 차이 합 ${v.rest >= 0 ? '+' : '−'}${Math.abs(r1(v.rest))}</li>` : '';
+  return `<div class="sub">${title} — 합계 ${total}점 (+는 이 수가 유리한 쪽)</div>
+    <ul class="reasons versus">
+      ${v.pros.map((t) => `<li class="pro">${t}</li>`).join('')}
+      ${v.cons.map((t) => `<li class="con">${t}</li>`).join('')}
+      ${rest}
+    </ul>`;
+}
+
+function projCell(p) {
+  if (!p.started && p.projected === 0) return '<span class="muted">·</span>';
+  return `<span class="muted">${p.started ? sign(p.current) : '0'}→</span>${sign(p.projected)}`;
 }
 
 function renderTrackerTab() {

@@ -14,7 +14,7 @@ import { DECK, EXPEDITION, DISCARD, canPlace } from '../rules.js';
 import { mulberry32 } from '../rng.js';
 import { determinize, greedyPlayout, simDraw, simPlay, simStep, totalScore } from '../sim.js';
 import { greedyMove } from '../policy.js';
-import { evaluateState } from '../evaluate.js';
+import { COLOR_SLOTS, evaluateState, EVAL_DEFAULTS } from '../evaluate.js';
 import { createRuleAgent } from './rule.js';
 
 export const MCTS_DEFAULTS = Object.freeze({
@@ -30,6 +30,7 @@ export const MCTS_DEFAULTS = Object.freeze({
   maxDepth: 0, // >0이면 루트부터 이 차례 수까지만 트리를 내려가고 평가 (0 = 제한 없음)
   topK: 5, // >0이면 루트 후보를 규칙 봇 평가 상위 K개 수로 제한 (샘플을 유망한 수에 몰아준다)
   bias: 0, // 루트 progressive bias 세기: + bias × (prior − 최고 prior)/scale / (n + 1). 0이면 끔
+  evalGift: 0, // 리프 정적 평가의 버림 더미 위험 항 가중치. 리프가 누구 차례냐에 따라 부호가 바뀌어 후보마다 편향이 생겨 끔 (강도 차이 없음)
 });
 
 /** 놓기 결정 → 정수 키. 같은 색 투자 카드는 같은 키 (결정화마다 투자 카드 id가 달라도 같은 결정). */
@@ -134,7 +135,12 @@ export function createMctsAgent(seed = 1, params = {}) {
     });
   }
 
-  function search(obs, legalMoves) {
+  // 분석용: 루트 수(놓기→뽑기)마다 리프의 색별 값 − 루트 색별 값의 합 (track일 때만)
+  const baseCols = new Float64Array(COLOR_SLOTS);
+  const EP = { ...EVAL_DEFAULTS, giftWeight: P.evalGift };
+  const leafCols = new Float64Array(COLOR_SLOTS);
+
+  function search(obs, legalMoves, track = false) {
     const me = obs.player;
     const root = new Node(null, 1 - me);
     if (P.bias > 0 || P.topK > 0) attachPriors(root, obs, legalMoves);
@@ -144,9 +150,10 @@ export function createMctsAgent(seed = 1, params = {}) {
     for (; it < P.iterations; it++) {
       if ((it & 15) === 0 && now() > deadline) break;
       const s = determinize(obs, rng);
-      const base = P.baseline ? evaluateState(s, me) : 0;
+      const base = P.baseline || track ? evaluateState(s, me, EP, track ? baseCols : null) : 0;
       baseSum += base;
       let node = root;
+      let firstNode = null; // 루트 차례의 뽑기 노드 (= 루트에서 고른 한 수)
       let grew = false;
       let depth = 0;
       while (!s.over && (P.maxDepth === 0 || depth < P.maxDepth)) {
@@ -188,10 +195,13 @@ export function createMctsAgent(seed = 1, params = {}) {
         node = childFor(node, candKey[i], p);
         grew = grew || expanded;
         simDraw(s, candTarget[i]);
+        if (depth === 1) firstNode = node;
         if (grew) break;
       }
       let diff;
+      let rolled = false;
       if ((P.leaf === 'rollout' || s.deck.length <= P.endRollout) && !s.over) {
+        rolled = true;
         const sc = greedyPlayout(s, rng, P.eps);
         diff = sc[me] - sc[1 - me];
       } else {
@@ -202,9 +212,15 @@ export function createMctsAgent(seed = 1, params = {}) {
           simStep(s, gOut.card, gOut.target, gOut.draw);
           depth++;
         }
-        diff = evaluateState(s, me);
+        diff = evaluateState(s, me, EP, track ? leafCols : null);
       }
-      const reward = (diff - base) / P.scale;
+      if (track && firstNode) {
+        if (rolled) evaluateState(s, me, EP, leafCols); // 롤아웃 리프: 끝난 판의 실제 색별 점수
+        if (!firstNode.cols) firstNode.cols = new Float64Array(COLOR_SLOTS);
+        for (let k = 0; k < COLOR_SLOTS; k++) firstNode.cols[k] += leafCols[k] - baseCols[k];
+        firstNode.colsN = (firstNode.colsN ?? 0) + 1;
+      }
+      const reward = ((P.baseline ? diff - base : diff)) / P.scale;
       for (let x = node; x; x = x.parent) {
         x.n++;
         x.w += reward;
@@ -221,19 +237,30 @@ export function createMctsAgent(seed = 1, params = {}) {
    * @returns {{ iterations, moves: { move, visits, expected, se }[] }}
    */
   function analyze(obs, legalMoves) {
-    const { root, iterations, baseMean } = search(obs, legalMoves);
+    const { root, iterations, baseMean } = search(obs, legalMoves, true);
     const moves = legalMoves.map((m) => {
       const play = root.children.get(playKey(m.card, m.target));
       const node = play && play.children.get(drawKey(m.draw));
       const n = node ? node.n : 0;
-      if (!n) return { move: m, visits: 0, expected: null, se: null };
+      if (!n) return { move: m, visits: 0, expected: null, se: null, colorEffect: null };
       const mean = node.w / n;
       const variance = n > 1 ? Math.max(0, (node.w2 - n * mean * mean) / (n - 1)) : NaN;
+      // 수읽기 색별 효과: 이 수 아래 리프의 (색별 값 − 같은 샘플 루트의 색별 값) 평균
+      let colorEffect = null;
+      if (node.cols && node.colsN) {
+        const k = node.colsN;
+        colorEffect = {
+          me: Array.from(node.cols.slice(0, 5), (x) => x / k),
+          opp: Array.from(node.cols.slice(5, 10), (x) => x / k),
+          gift: node.cols[10] / k,
+        };
+      }
       return {
         move: m,
         visits: n,
         expected: baseMean + mean * P.scale,
         se: n > 1 ? (Math.sqrt(variance / n) * P.scale) : null,
+        colorEffect,
       };
     });
     moves.sort((a, b) => b.visits - a.visits || (b.expected ?? -Infinity) - (a.expected ?? -Infinity));
