@@ -56,3 +56,16 @@ time('규칙 봇 결정 (rule vs rule 대국 중)', 300, 'decisions', (n) => {
   decisions = d;
   return d;
 });
+
+{
+  const { createMctsAgent } = await import('../engine/agents/mcts.js');
+  const agent = createMctsAgent(1);
+  const obs = mid;
+  const moves = (await import('../engine/observation.js')).legalMovesFromObservation(obs);
+  agent.chooseMove(obs, moves);
+  const n = 30;
+  const t0 = performance.now();
+  for (let i = 0; i < n; i++) agent.chooseMove(obs, moves);
+  const ms = (performance.now() - t0) / n;
+  console.log(`MCTS 결정 (기본값 ${agent.params.iterations}회 반복, 중반 국면): ${ms.toFixed(1)} ms/결정, ${Math.round(agent.params.iterations / ms * 1000).toLocaleString('en-US')} iterations/s`);
+}

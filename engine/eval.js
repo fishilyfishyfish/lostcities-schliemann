@@ -28,19 +28,14 @@ export function pairDeck(seed, i) {
 }
 
 /**
- * 미러 대국.
+ * 미러 대국 쌍 [from, to)를 진행하고 원자료를 돌려준다 (병렬 실행 시 조각 단위).
  * - makeA, makeB: (seed) => agent. 판마다 새로 만든다 (상태를 가진 에이전트도 판 사이에 섞이지 않게).
- * - stalled 판(maxTurns 초과)은 무승부(점수 차 0, 승점 0.5)로 집계하고 개수를 따로 보고한다.
+ * - stalled 판(maxTurns 초과)은 무승부(점수 차 0, 승점 0.5)로 집계하고 개수를 따로 센다.
  *   현재 점수로 판정하면 앞선 쪽이 버림 더미만 뽑아 시간을 끄는 전략이 이득이 되기 때문.
- * @returns 점수 차(A−B, 판당), 승률(A, 판당; 무승부 0.5), 승/무/패, 평균 점수, stalled 수, 소요 시간
  */
-export function mirrorMatch(makeA, makeB, { pairs = 100, seed = 1, maxTurns = DEFAULT_MAX_TURNS, onPair = null } = {}) {
-  const pairDiff = [];
-  const pairWin = [];
-  let w = 0, d = 0, l = 0, stalled = 0, turns = 0;
-  let sumA = 0, sumB = 0;
-  const t0 = Date.now();
-  for (let i = 0; i < pairs; i++) {
+export function runPairs(makeA, makeB, { from = 0, to = 100, seed = 1, maxTurns = DEFAULT_MAX_TURNS, onPair = null } = {}) {
+  const part = { pairDiff: [], pairWin: [], wins: 0, draws: 0, losses: 0, stalled: 0, turns: 0, sumA: 0, sumB: 0, finished: 0, games: 0 };
+  for (let i = from; i < to; i++) {
     const deck = pairDeck(seed, i);
     const startingPlayer = i % 2;
     let diff = 0, win = 0;
@@ -51,41 +46,62 @@ export function mirrorMatch(makeA, makeB, { pairs = 100, seed = 1, maxTurns = DE
       const seatA = g; // 1판: A가 0번 자리, 2판: A가 1번 자리
       const agents = seatA === 0 ? [a, b] : [b, a];
       const r = playRound(agents, { deck, startingPlayer, maxTurns, keepHistory: false });
-      turns += r.turns;
-      const sa = r.scores[seatA];
-      const sb = r.scores[1 - seatA];
+      part.turns += r.turns;
+      part.games++;
       if (r.stalled) {
-        stalled++;
-        d++;
+        part.stalled++;
+        part.draws++;
         win += 0.5;
         continue;
       }
-      sumA += sa;
-      sumB += sb;
+      const sa = r.scores[seatA];
+      const sb = r.scores[1 - seatA];
+      part.finished++;
+      part.sumA += sa;
+      part.sumB += sb;
       diff += sa - sb;
-      if (sa > sb) { w++; win += 1; } else if (sa < sb) { l++; } else { d++; win += 0.5; }
+      if (sa > sb) { part.wins++; win += 1; } else if (sa < sb) { part.losses++; } else { part.draws++; win += 0.5; }
     }
-    pairDiff.push(diff / 2);
-    pairWin.push(win / 2);
-    if (onPair) onPair(i + 1);
+    part.pairDiff.push(diff / 2);
+    part.pairWin.push(win / 2);
+    if (onPair) onPair(i + 1 - from);
   }
-  const games = pairs * 2;
-  const finished = games - stalled;
+  return part;
+}
+
+/** runPairs 조각들을 합쳐 통계로. */
+export function summarize(parts, { seed = 1, ms = 0 } = {}) {
+  const all = { pairDiff: [], pairWin: [], wins: 0, draws: 0, losses: 0, stalled: 0, turns: 0, sumA: 0, sumB: 0, finished: 0, games: 0 };
+  for (const p of parts) {
+    all.pairDiff.push(...p.pairDiff);
+    all.pairWin.push(...p.pairWin);
+    for (const k of ['wins', 'draws', 'losses', 'stalled', 'turns', 'sumA', 'sumB', 'finished', 'games']) all[k] += p[k];
+  }
   return {
-    pairs,
-    games,
+    pairs: all.pairDiff.length,
+    games: all.games,
     seed,
-    diff: meanCI(pairDiff),
-    winRate: meanCI(pairWin),
-    wins: w,
-    draws: d,
-    losses: l,
-    stalled,
-    avgScoreA: finished ? sumA / finished : NaN,
-    avgScoreB: finished ? sumB / finished : NaN,
-    avgTurns: turns / games,
-    ms: Date.now() - t0,
+    diff: meanCI(all.pairDiff),
+    winRate: meanCI(all.pairWin),
+    wins: all.wins,
+    draws: all.draws,
+    losses: all.losses,
+    stalled: all.stalled,
+    avgScoreA: all.finished ? all.sumA / all.finished : NaN,
+    avgScoreB: all.finished ? all.sumB / all.finished : NaN,
+    avgTurns: all.games ? all.turns / all.games : NaN,
+    ms,
   };
+}
+
+/**
+ * 미러 대국 (단일 스레드).
+ * @returns 점수 차(A−B, 판당), 승률(A, 판당; 무승부 0.5), 승/무/패, 평균 점수, stalled 수, 소요 시간
+ */
+export function mirrorMatch(makeA, makeB, { pairs = 100, seed = 1, maxTurns = DEFAULT_MAX_TURNS, onPair = null } = {}) {
+  const t0 = Date.now();
+  const part = runPairs(makeA, makeB, { from: 0, to: pairs, seed, maxTurns, onPair });
+  return summarize([part], { seed, ms: Date.now() - t0 });
 }
 
 export function formatMatch(nameA, nameB, r) {

@@ -25,7 +25,7 @@ export const RULE_DEFAULTS = Object.freeze({
   noise: 1e-6,
 });
 
-function expInfo(exp) {
+export function expInfo(exp) {
   let sum = 0, wagers = 0, top = 0;
   for (const c of exp) {
     if (isWager(c)) wagers++;
@@ -38,7 +38,7 @@ function expInfo(exp) {
  * 한 색의 기대 점수.
  * handCol: 그 색 손패, unseenCol: 그 색 보이지 않는 카드, extra/skip: 덱 뽑기 평가용 (손패에 extra 추가, unseen에서 skip 제외).
  */
-function colorValue(exp, handCol, unseenCol, ctx, extra = -1, skip = -1) {
+export function colorValue(exp, handCol, unseenCol, ctx, extra = -1, skip = -1) {
   const e = expInfo(exp);
   let handSum = 0, handCnt = 0, handWagers = 0;
   const addHand = (c) => {
@@ -67,7 +67,7 @@ function colorValue(exp, handCol, unseenCol, ctx, extra = -1, skip = -1) {
 }
 
 /** 버림 더미 맨 위 카드가 상대에게 주는 가치 (상대가 가져가 놓을 수 있는가). */
-function giftValue(card, oppExp, P) {
+export function giftValue(card, oppExp, P) {
   if (card < 0) return 0;
   const o = expInfo(oppExp);
   if (isWager(card)) {
@@ -125,47 +125,56 @@ export function createRuleAgent(seed = 1, params = {}) {
     return total / n;
   }
 
+  /** 합법수마다 국면 가치 (클수록 좋음). MCTS 루트 prior로도 쓴다. */
+  function scoreMoves(obs, legalMoves) {
+    const ctx = context(obs);
+    const values = new Array(legalMoves.length);
+    const groups = new Map();
+    legalMoves.forEach((m, i) => {
+      const key = `${m.card}|${m.target}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(i);
+    });
+    for (const idxs of groups.values()) {
+      const { card, target } = legalMoves[idxs[0]];
+      const color = cardColor(card);
+      const exps = obs.myExpeditions.slice();
+      const pileTops = obs.discards.map(topOf);
+      const hand1 = obs.hand.filter((c) => c !== card);
+      if (target === EXPEDITION) exps[color] = [...exps[color], card];
+      else pileTops[color] = card;
+      const handBy1 = byColor(hand1);
+      for (const i of idxs) {
+        const m = legalMoves[i];
+        if (m.draw === DECK) {
+          values[i] = evalPosition(obs, ctx, exps, handBy1, pileTops) + deckGain(ctx, exps, handBy1);
+        } else {
+          const pile = obs.discards[m.draw].slice();
+          if (target === DISCARD && color === m.draw) pile.push(card); // 합법수에는 없지만 방어적으로
+          const drawn = pile.pop();
+          const tops = pileTops.slice();
+          tops[m.draw] = topOf(pile);
+          const handBy2 = handBy1.map((h) => h.slice());
+          handBy2[cardColor(drawn)].push(drawn);
+          values[i] = evalPosition(obs, ctx, exps, handBy2, tops);
+        }
+      }
+    }
+    return values;
+  }
+
   return {
     name: 'rule',
+    scoreMoves,
     chooseMove(obs, legalMoves) {
-      const ctx = context(obs);
-      const groups = new Map();
-      for (const m of legalMoves) {
-        const key = `${m.card}|${m.target}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(m);
-      }
+      const values = scoreMoves(obs, legalMoves);
       let best = null;
       let bestV = -Infinity;
-      for (const moves of groups.values()) {
-        const { card, target } = moves[0];
-        const color = cardColor(card);
-        const exps = obs.myExpeditions.slice();
-        const pileTops = obs.discards.map(topOf);
-        const hand1 = obs.hand.filter((c) => c !== card);
-        if (target === EXPEDITION) exps[color] = [...exps[color], card];
-        else pileTops[color] = card;
-        const handBy1 = byColor(hand1);
-        for (const m of moves) {
-          let v;
-          if (m.draw === DECK) {
-            v = evalPosition(obs, ctx, exps, handBy1, pileTops) + deckGain(ctx, exps, handBy1);
-          } else {
-            const pile = obs.discards[m.draw].slice();
-            if (target === DISCARD && color === m.draw) pile.push(card); // 합법수에는 없지만 방어적으로
-            const drawn = pile.pop();
-            const tops = pileTops.slice();
-            tops[m.draw] = topOf(pile);
-            const handBy2 = handBy1.map((h) => h.slice());
-            handBy2[cardColor(drawn)].push(drawn);
-            v = evalPosition(obs, ctx, exps, handBy2, tops);
-          }
-          v += P.noise * rng();
-          if (v > bestV) { bestV = v; best = m; }
-        }
+      for (let i = 0; i < legalMoves.length; i++) {
+        const v = values[i] + P.noise * rng();
+        if (v > bestV) { bestV = v; best = legalMoves[i]; }
       }
       return best;
     },
   };
 }
-

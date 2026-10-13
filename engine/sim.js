@@ -5,6 +5,7 @@ import { ALL_CARDS, NUM_COLORS, cardColor } from './cards.js';
 import { shuffle } from './rng.js';
 import { DECK, DISCARD, EXPEDITION, canPlace } from './rules.js';
 import { expeditionScore } from './scoring.js';
+import { GREEDY_DEFAULTS, greedyMove } from './policy.js';
 
 /**
  * 관측 객체에서 보이지 않는 카드 목록: 덱 + 상대의 미공개 손패.
@@ -72,15 +73,25 @@ export function cloneSimState(s) {
 
 /** 검사·기록 없이 수 적용. 합법수만 넘길 것 (rules.applyMove와 결과 동일, 기록만 없음). */
 export function simStep(s, card, target, draw) {
-  const p = s.current;
-  const hand = s.hands[p];
+  simPlay(s, card, target);
+  simDraw(s, draw);
+}
+
+/** 차례의 앞 절반: 카드를 놓거나 버린다 (차례는 넘어가지 않음). */
+export function simPlay(s, card, target) {
+  const hand = s.hands[s.current];
   const i = hand.indexOf(card);
   hand[i] = hand[hand.length - 1];
   hand.pop();
   const color = cardColor(card);
-  if (target === EXPEDITION) s.expeditions[p][color].push(card);
+  if (target === EXPEDITION) s.expeditions[s.current][color].push(card);
   else s.discards[color].push(card);
-  hand.push(draw === DECK ? s.deck.pop() : s.discards[draw].pop());
+}
+
+/** 차례의 뒤 절반: 뽑고 차례를 넘긴다. 덱 마지막 장이면 종료. */
+export function simDraw(s, draw) {
+  const p = s.current;
+  s.hands[p].push(draw === DECK ? s.deck.pop() : s.discards[draw].pop());
   s.turn++;
   if (s.deck.length === 0) s.over = true;
   else s.current = 1 - p;
@@ -118,3 +129,28 @@ export function totalScore(exps) {
   for (let c = 0; c < NUM_COLORS; c++) t += expeditionScore(exps[c]);
   return t;
 }
+
+/**
+ * 탐욕 정책 플레이아웃 (engine/policy.js). eps 확률로 무작위 수를 섞어 다양성을 준다.
+ * maxTurns를 넘기면 그 시점 점수로 멈춘다.
+ * @returns {number[]} [p0 점수, p1 점수]
+ */
+export function greedyPlayout(s, rng, eps = 0.1, maxTurns = 400, P = GREEDY_DEFAULTS) {
+  const limit = s.turn + maxTurns;
+  const out = greedyOut;
+  while (!s.over && s.turn < limit) {
+    const p = s.current;
+    if (eps > 0 && rng() < eps) {
+      const hand = s.hands[p];
+      const card = hand[Math.floor(rng() * hand.length)];
+      const color = cardColor(card);
+      const target = canPlace(s.expeditions[p][color], card) && rng() < 0.5 ? EXPEDITION : DISCARD;
+      simStep(s, card, target, DECK);
+      continue;
+    }
+    greedyMove(s.hands[p], s.expeditions[p], s.expeditions[1 - p], s.discards, s.deck.length, out, P);
+    simStep(s, out.card, out.target, out.draw);
+  }
+  return [totalScore(s.expeditions[0]), totalScore(s.expeditions[1])];
+}
+const greedyOut = { card: -1, target: DISCARD, draw: DECK };
