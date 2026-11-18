@@ -312,7 +312,7 @@ function renderStatus(lastOpp) {
     const canExp = canTarget(c, EXPEDITION);
     const exp = ui.obs.myExpeditions[cardColor(c)];
     const preview = canExp ? ` (${fmtScore(expeditionScore(exp))} → ${fmtScore(expeditionScore([...exp, c]))})` : '';
-    button(`교역로에 놓기${preview}`, () => choose(EXPEDITION), 'primary', !canExp);
+    button(`거래소에 놓기${preview}`, () => choose(EXPEDITION), 'primary', !canExp);
     button('장터에 내놓기', () => choose(DISCARD), '', !canTarget(c, DISCARD));
     button('취소', () => { ui.selected = null; render(); });
   } else {
@@ -377,8 +377,8 @@ newGame();
 
 const STATUS_LABEL = {
   myHand: ['손', '내 손패'],
-  myExpedition: ['내', '내 교역로'],
-  oppExpedition: ['AI', 'AI 교역로'],
+  myExpedition: ['내', '내 거래소'],
+  oppExpedition: ['AI', 'AI 거래소'],
   discard: ['장', '장터 (테두리: 맨 위)'],
   oppHandKnown: ['AI손', 'AI가 장터에서 가져가 들고 있음'],
   unseen: ['', '미확인 (창고 또는 AI 손패)'],
@@ -414,7 +414,7 @@ function renderAnalysis() {
 const CONF_TEXT = { similar: '비슷함', slight: '근소', clear: '뚜렷' };
 
 function moveText(m) {
-  const what = m.target === EXPEDITION ? '교역로에 놓기' : '장터에 내놓기';
+  const what = m.target === EXPEDITION ? '거래소에 놓기' : '장터에 내놓기';
   const from = m.draw === DECK ? '창고에서 뽑기' : `${COLOR_NAMES[m.draw]} 장터에서 뽑기`;
   return `${cardName(m.card)} ${what} → ${from}`;
 }
