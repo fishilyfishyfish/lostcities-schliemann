@@ -120,7 +120,7 @@ button { font: inherit; color: inherit; }
   font-size: 14px;
   color: var(--muted);
 }
-.coin-pill b { color: var(--text); font-family: var(--num); font-size: 16px; font-variant-numeric: tabular-nums; }
+.coin-pill b { color: var(--text); font-family: var(--num-card); font-size: 16px; font-variant-numeric: tabular-nums; }
 .ic.coin { width: 20px; height: 20px; color: var(--accent); filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.35)); }
 .ai-pick { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
 .ai-pick select {
@@ -278,8 +278,8 @@ button { font: inherit; color: inherit; }
   border-radius: 999px;
   border: 1.5px solid #d3bd8b;
   background: var(--paper-hi);
-  font-family: var(--num);
-  font-size: 13px;
+  font-family: var(--num-card);
+  font-size: 14px;
   line-height: 20px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -338,7 +338,8 @@ button { font: inherit; color: inherit; }
   background: #3b2614;
   border: 1.5px solid #e9cf94;
   color: #ffe9b8;
-  font-size: 12px;
+  font-family: var(--num-card);
+  font-size: 13px;
   font-weight: 700;
   text-align: center;
 }
@@ -371,7 +372,7 @@ button { font: inherit; color: inherit; }
   background: radial-gradient(circle at 35% 30%, #ffe08a, #e0a52e);
   border: 2px solid #8f6210;
   color: #4a3000;
-  font-family: var(--num);
+  font-family: var(--num-card);
   font-size: calc(var(--cw) * 0.3);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
