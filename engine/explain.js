@@ -221,7 +221,7 @@ export function explainMove(obs, move, ctx = viewContext(obs)) {
       if (a.unseenAbove.length) more.push(`미확인 ${name} ${a.unseenAbove.length}장`);
       reasons.push({
         kind: 'play',
-        text: `${name} 탐험대 시작 (${cardValue(card)}): ${name} 예상 ${fmt(b.projected)} → ${fmt(a.projected)}` +
+        text: `${name} 교역로 시작 (${cardValue(card)}): ${name} 예상 ${fmt(b.projected)} → ${fmt(a.projected)}` +
           (more.length ? ` — 이어 놓을 후보: ${more.join(', ')}` : '') +
           (a.projected < 0 ? '. 비용 20을 못 넘을 가능성이 크다' : ''),
         delta: playDelta,
@@ -229,7 +229,7 @@ export function explainMove(obs, move, ctx = viewContext(obs)) {
     } else {
       reasons.push({
         kind: 'play',
-        text: `${name} 탐험대에 ${cardValue(card)} 추가: ${name} 예상 ${fmt(b.projected)} → ${fmt(a.projected)}`,
+        text: `${name} 교역로에 ${cardValue(card)} 추가: ${name} 예상 ${fmt(b.projected)} → ${fmt(a.projected)}`,
         delta: playDelta,
       });
     }
@@ -252,20 +252,20 @@ export function explainMove(obs, move, ctx = viewContext(obs)) {
     if (Math.abs(playDelta) < 0.5) {
       reasons.push({
         kind: 'discard',
-        text: `${cardNameKo(card)} 버리기: 내 ${name} 예상에는 영향이 거의 없다` +
+        text: `${cardNameKo(card)} 내놓기: 내 ${name} 예상에는 영향이 거의 없다` +
           (isWager(card) && b.top > 0 ? ` (${name}에 이미 숫자 카드가 있어 투자 카드는 놓을 수 없다)`
             : !isWager(card) && b.started && cardValue(card) <= b.top ? ` (이미 ${b.top}까지 놓아 쓸 수 없는 카드)`
             : !b.started && !b.worthStarting ? ` (${josa(name, '은', '는')} 지금 시작하면 손해로 보는 색)` : ''),
         delta: playDelta,
       });
     } else {
-      reasons.push({ kind: 'discard', text: `${cardNameKo(card)} 버리기: 내 ${name} 예상 ${fmt(b.projected)} → ${fmt(a.projected)}`, delta: playDelta });
+      reasons.push({ kind: 'discard', text: `${cardNameKo(card)} 내놓기: 내 ${name} 예상 ${fmt(b.projected)} → ${fmt(a.projected)}`, delta: playDelta });
     }
     const g = giftValue(card, oppExp, P);
     if (g > 0) {
       const where = oi.len === 0 ? `AI는 ${josa(name, '을', '를')} 아직 시작하지 않았지만 새로 시작하는 데 쓸 수 있다`
-        : isWager(card) ? `AI ${name} 탐험대는 아직 숫자 카드가 없어 투자 카드를 더 놓을 수 있다`
-        : `AI ${name} 탐험대(맨 위 ${oi.top})에 바로 이어지는 카드다`;
+        : isWager(card) ? `AI ${name} 교역로는 아직 숫자 카드가 없어 투자 카드를 더 놓을 수 있다`
+        : `AI ${name} 교역로(맨 위 ${oi.top})에 바로 이어지는 카드다`;
       reasons.push({ kind: 'gift', text: `AI에게 줄 위험: ${where} (위험도 ${fmt(-P.giftWeight * g)})`, delta: -P.giftWeight * g });
     }
     const covered = topOf(obs.discards[color]);
@@ -277,7 +277,7 @@ export function explainMove(obs, move, ctx = viewContext(obs)) {
   if (draw === DECK) {
     reasons.push({
       kind: 'draw',
-      text: `덱에서 뽑기: 기대 ${fmt(deckGain)} (미확인 ${ctx.unseen.length}장 중 내게 쓸모 있는 카드 약 ${usefulUnseen}장). 덱이 1장 줄어 라운드 끝이 가까워진다`,
+      text: `창고에서 뽑기: 기대 ${fmt(deckGain)} (미확인 ${ctx.unseen.length}장 중 내게 쓸모 있는 카드 약 ${usefulUnseen}장). 창고가 1장 줄어 라운드 끝이 가까워진다`,
       delta: deckGain,
     });
   } else {
@@ -286,7 +286,7 @@ export function explainMove(obs, move, ctx = viewContext(obs)) {
     const ad = after[draw];
     reasons.push({
       kind: 'draw',
-      text: `${dName} 더미에서 ${cardNameKo(drawn)} 가져오기: 내 ${dName} 예상 ${fmt(md.projected)} → ${fmt(ad.projected)}. 덱은 줄지 않아 라운드가 길어진다`,
+      text: `${dName} 장터에서 ${cardNameKo(drawn)} 가져오기: 내 ${dName} 예상 ${fmt(md.projected)} → ${fmt(ad.projected)}. 창고는 줄지 않아 라운드가 길어진다`,
       delta: ad.projected - md.projected,
     });
     const deny = giftValue(drawn, obs.oppExpeditions[draw], P);

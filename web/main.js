@@ -73,19 +73,32 @@ function newGame() {
 
 // ---------- 표기 ----------
 
-function cardText(card) {
-  return isWager(card) ? '🤝' : String(cardValue(card));
-}
+const ICON = ['g-yellow', 'g-blue', 'g-white', 'g-green', 'g-red']; // 상품: 향신료, 도자기, 비단, 옥, 보석
+
+const svg = (id, cls = '') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
 
 function cardName(card) {
   return `${COLOR_NAMES[cardColor(card)]} ${isWager(card) ? '투자' : cardValue(card)}`;
 }
 
+/** 카드: 위쪽 띠(숫자 + 상품 아이콘)만으로 읽히게 만들어 겹쳐 쌓아도 숫자가 보인다. 투자 카드는 금화 + 계약서. */
 function cardEl(card, extra = '') {
+  const c = cardColor(card);
   const el = document.createElement('div');
-  el.className = `card c-${COLOR_KEYS[cardColor(card)]} ${isWager(card) ? 'wager' : ''} ${extra}`;
-  el.innerHTML = `<span class="v">${cardText(card)}</span><span class="v2">${cardText(card)}</span>`;
+  el.className = `card c-${COLOR_KEYS[c]} ${isWager(card) ? 'wager' : ''} ${extra}`;
+  el.innerHTML = isWager(card)
+    ? `<div class="band"><span class="n">${svg('g-coin', 'coin')}</span>${svg(ICON[c])}</div>
+       <div class="face">${svg('g-coin', 'coin big-coin')}<span class="tag">투자</span></div>`
+    : `<div class="band"><span class="n">${cardValue(card)}</span>${svg(ICON[c])}</div>
+       <div class="face">${svg(ICON[c], 'wm')}<span class="big">${cardValue(card)}</span></div>`;
   el.dataset.card = card;
+  return el;
+}
+
+function slotEl(color) {
+  const el = document.createElement('div');
+  el.className = `slot c-${COLOR_KEYS[color]}`;
+  el.innerHTML = svg(ICON[color]);
   return el;
 }
 
@@ -164,8 +177,8 @@ function render() {
   for (let c = 0; c < NUM_COLORS; c++) {
     const pile = document.createElement('button');
     pile.type = 'button';
-    pile.className = `pile p-${COLOR_KEYS[c]}`;
-    pile.setAttribute('aria-label', `${COLOR_NAMES[c]} 버림 더미 ${v.discards[c].length}장`);
+    pile.className = `pile c-${COLOR_KEYS[c]}`;
+    pile.setAttribute('aria-label', `${COLOR_NAMES[c]} 장터 ${v.discards[c].length}장`);
     const d = v.discards[c];
     if (d.length) {
       const top = d[d.length - 1];
@@ -179,7 +192,7 @@ function render() {
         pile.append(n);
       }
     } else {
-      pile.append(Object.assign(document.createElement('div'), { className: 'slot' }));
+      pile.append(slotEl(c));
     }
     const drawable = draws.includes(c);
     const discardTarget = ui.selected !== null && !ui.pending && cardColor(ui.selected) === c && canTarget(ui.selected, DISCARD);
@@ -222,7 +235,7 @@ function render() {
   if (o.opponentKnownCards.length) {
     const label = document.createElement('span');
     label.className = 'known-label';
-    label.textContent = 'AI가 버림 더미에서 가져간 카드';
+    label.textContent = 'AI가 장터에서 가져간 카드';
     known.append(label);
     const row = document.createElement('div');
     row.className = 'mini-row';
@@ -252,7 +265,7 @@ function renderExpeditions(container, exps, { ghost = null, highlight = null, ta
     for (const card of exps[c]) {
       stack.append(cardEl(card, `${card === ghost ? 'ghost' : ''} ${card === highlight ? 'last' : ''}`));
     }
-    if (exps[c].length === 0) stack.append(Object.assign(document.createElement('div'), { className: 'slot' }));
+    if (exps[c].length === 0) stack.append(slotEl(c));
     const score = document.createElement('div');
     score.className = 'exp-score';
     const s = expeditionScore(exps[c]);
@@ -280,7 +293,7 @@ function renderStatus(lastOpp) {
     actions.append(b);
   };
 
-  const oppNote = lastOpp ? `AI: ${cardName(lastOpp.card)} ${lastOpp.target === EXPEDITION ? '놓음' : '버림'}, ${lastOpp.draw === DECK ? '덱에서 뽑음' : `${COLOR_NAMES[lastOpp.draw]} 더미에서 가져감`}. ` : '';
+  const oppNote = lastOpp ? `AI: ${cardName(lastOpp.card)} ${lastOpp.target === EXPEDITION ? '놓음' : '내놓음'}, ${lastOpp.draw === DECK ? '창고에서 뽑음' : `${COLOR_NAMES[lastOpp.draw]} 장터에서 가져감`}. ` : '';
 
   if (ui.error) {
     msg.textContent = `오류: ${ui.error}`;
@@ -288,10 +301,10 @@ function renderStatus(lastOpp) {
     msg.textContent = '라운드 종료';
     button('결과 보기', showResult, 'primary');
   } else if (!myTurn()) {
-    msg.textContent = 'AI 차례…';
+    msg.textContent = 'AI가 거래 중…';
   } else if (ui.pending) {
     const { card, target } = ui.pending;
-    msg.textContent = `${cardName(card)} ${target === EXPEDITION ? '놓기' : '버리기'} → 덱이나 버림 더미에서 뽑을 곳을 고르세요`;
+    msg.textContent = `${cardName(card)} ${target === EXPEDITION ? '놓기' : '내놓기'} → 창고나 장터에서 뽑을 곳을 고르세요`;
     button('취소', () => { ui.pending = null; ui.suggestedDraw = null; render(); });
   } else if (ui.selected !== null) {
     const c = ui.selected;
@@ -299,8 +312,8 @@ function renderStatus(lastOpp) {
     const canExp = canTarget(c, EXPEDITION);
     const exp = ui.obs.myExpeditions[cardColor(c)];
     const preview = canExp ? ` (${fmtScore(expeditionScore(exp))} → ${fmtScore(expeditionScore([...exp, c]))})` : '';
-    button(`탐험대에 놓기${preview}`, () => choose(EXPEDITION), 'primary', !canExp);
-    button('버리기', () => choose(DISCARD), '', !canTarget(c, DISCARD));
+    button(`교역로에 놓기${preview}`, () => choose(EXPEDITION), 'primary', !canExp);
+    button('장터에 내놓기', () => choose(DISCARD), '', !canTarget(c, DISCARD));
     button('취소', () => { ui.selected = null; render(); });
   } else {
     msg.textContent = `${oppNote}카드를 고르세요`;
@@ -334,7 +347,9 @@ function draw(source) {
 function showResult() {
   if (!ui.final) return;
   const [me, ai] = ui.final.scores;
-  $('result-title').textContent = me.total > ai.total ? '승리' : me.total < ai.total ? '패배' : '무승부';
+  const result = me.total > ai.total ? 'win' : me.total < ai.total ? 'lose' : 'draw';
+  $('result-title').textContent = { win: '승리', lose: '패배', draw: '무승부' }[result];
+  $('result-title').dataset.result = result;
   const t = $('result-table');
   const rows = [`<tr><th></th>${COLOR_NAMES.map((n, i) => `<th class="h-${COLOR_KEYS[i]}">${n}</th>`).join('')}<th>합계</th></tr>`];
   for (const [label, s] of [['나', me], ['AI', ai]]) {
@@ -362,11 +377,11 @@ newGame();
 
 const STATUS_LABEL = {
   myHand: ['손', '내 손패'],
-  myExpedition: ['내', '내 탐험대'],
-  oppExpedition: ['AI', 'AI 탐험대'],
-  discard: ['버', '버림 더미 (굵게: 맨 위)'],
-  oppHandKnown: ['AI손', 'AI가 버림 더미에서 가져가 들고 있음'],
-  unseen: ['', '미확인 (덱 또는 AI 손패)'],
+  myExpedition: ['내', '내 교역로'],
+  oppExpedition: ['AI', 'AI 교역로'],
+  discard: ['장', '장터 (테두리: 맨 위)'],
+  oppHandKnown: ['AI손', 'AI가 장터에서 가져가 들고 있음'],
+  unseen: ['', '미확인 (창고 또는 AI 손패)'],
 };
 
 function setAnalysisOpen(open) {
@@ -399,8 +414,8 @@ function renderAnalysis() {
 const CONF_TEXT = { similar: '비슷함', slight: '근소', clear: '뚜렷' };
 
 function moveText(m) {
-  const what = m.target === EXPEDITION ? '탐험대에 놓기' : '버리기';
-  const from = m.draw === DECK ? '덱에서 뽑기' : `${COLOR_NAMES[m.draw]} 더미에서 뽑기`;
+  const what = m.target === EXPEDITION ? '교역로에 놓기' : '장터에 내놓기';
+  const from = m.draw === DECK ? '창고에서 뽑기' : `${COLOR_NAMES[m.draw]} 장터에서 뽑기`;
   return `${cardName(m.card)} ${what} → ${from}`;
 }
 
@@ -441,7 +456,7 @@ function renderMovesTab() {
       <tr><th>나</th>${pos.me.map((p) => `<td>${projCell(p)}</td>`).join('')}</tr>
       <tr><th>AI</th>${pos.opp.map((p) => `<td>${projCell(p)}</td>`).join('')}</tr>
     </table>
-    <p class="note">예상 최종 = 놓인 카드 + 손패 중 이어 놓을 수 있는 카드 × ${Math.round(a.weights.hand * 100)}% + 아직 안 나온 카드 중 이어 놓을 수 있는 카드 × ${Math.round(a.weights.unseen * 100)}%(내가 뽑아 쓸 몫)로 (합 − 20) × 배수 + 보너스를 계산한 것. 시작 안 한 색은 손해면 시작하지 않는다고 보고 0. AI는 AI가 가져간 카드와, 안 나온 카드 × ${Math.round(a.weights.aiUnseen * 100)}%로 계산. 덱 ${pos.deckCount}장 · 내 남은 차례 약 ${pos.myTurns}번 · 지금 놓을 수 있는 손패 ${pos.planned}장.</p>`;
+    <p class="note">예상 최종 = 놓인 카드 + 손패 중 이어 놓을 수 있는 카드 × ${Math.round(a.weights.hand * 100)}% + 아직 안 나온 카드 중 이어 놓을 수 있는 카드 × ${Math.round(a.weights.unseen * 100)}%(내가 뽑아 쓸 몫)로 (합 − 20) × 배수 + 보너스를 계산한 것. 시작 안 한 색은 손해면 시작하지 않는다고 보고 0. AI는 AI가 가져간 카드와, 안 나온 카드 × ${Math.round(a.weights.aiUnseen * 100)}%로 계산. 창고 ${pos.deckCount}장 · 내 남은 차례 약 ${pos.myTurns}번 · 지금 놓을 수 있는 손패 ${pos.planned}장.</p>`;
   box.append(summary);
 
   const searched = a.moves.filter((m) => m.expected !== null);
@@ -496,7 +511,7 @@ function renderMovesTab() {
       d.innerHTML = `<div class="sub">이 수가 하는 일</div>
         <ul class="reasons">${m.reasons.map((r) => `<li class="r-${r.kind}">${r.text}</li>`).join('')}</ul>
         ${i > 0 ? versusHtml(m, searched) : ''}
-        <div class="effects">이 수의 효과: 놓기·버리기 <b>${sign(eff.play)}</b> · 뽑기 <b>${sign(eff.draw)}</b> · AI에게 줄 위험 <b>${sign(eff.gift)}</b> = <b>${sign(eff.total)}</b></div>
+        <div class="effects">이 수의 효과: 놓기·내놓기 <b>${sign(eff.play)}</b> · 뽑기 <b>${sign(eff.draw)}</b> · AI에게 줄 위험 <b>${sign(eff.gift)}</b> = <b>${sign(eff.total)}</b></div>
         <div class="muted">${staticNote} 수읽기 기대 점수 차(라운드 끝 내 점수 − AI 점수) ${sign(m.expected)}.</div>`;
       const b = document.createElement('button');
       b.className = 'btn small';
@@ -539,7 +554,7 @@ function renderTrackerTab() {
   if (!t) return;
   const o = ui.obs;
   const oppHidden = o.opponentHandCount - o.opponentKnownCards.length;
-  $('tracker-summary').textContent = `미확인 ${t.unseenTotal}장 = 덱 ${o.deckCount}장 + AI 손패 중 모르는 ${oppHidden}장`;
+  $('tracker-summary').textContent = `미확인 ${t.unseenTotal}장 = 창고 ${o.deckCount}장 + AI 손패 중 모르는 ${oppHidden}장`;
   const table = $('tracker-table');
   table.replaceChildren();
   const head = document.createElement('tr');

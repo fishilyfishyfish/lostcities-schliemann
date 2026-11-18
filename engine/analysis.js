@@ -94,7 +94,7 @@ export function compareMoves(a, b, minAbs = 0.8) {
     terms.push({ value: -dop, text: `AI ${name} 예상이 ${r1(dop)}점 ${dop > 0 ? '높다' : '낮다'}`, side: 'opp', color: c });
   }
   const dg = a.colorEffect.gift - b.colorEffect.gift;
-  terms.push({ value: dg, text: `버림 더미로 AI에게 줄 위험이 ${r1(dg)}점 ${dg > 0 ? '적다' : '많다'}`, side: 'gift', color: -1 });
+  terms.push({ value: dg, text: `장터로 AI에게 줄 위험이 ${r1(dg)}점 ${dg > 0 ? '적다' : '많다'}`, side: 'gift', color: -1 });
   terms.sort((x, y) => Math.abs(y.value) - Math.abs(x.value));
   const prosT = terms.filter((t) => t.value >= minAbs).slice(0, 3);
   const consT = terms.filter((t) => t.value <= -minAbs).slice(0, 2);
