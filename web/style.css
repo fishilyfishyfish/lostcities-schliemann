@@ -2,6 +2,17 @@
    바다색 바탕 위에 양피지 교역로, 목재 장터, 황동 단추. 상품: 노랑 향신료, 파랑 도자기, 하양 비단, 초록 옥, 빨강 보석.
    카드는 위쪽 띠(숫자 + 상품 아이콘)만으로 읽히게 만들어 겹쳐 쌓아도 숫자가 보인다. */
 
+/* Gaegu Bold 서브셋 (SIL OFL, web/fonts/OFL.txt). 제목·버튼·라벨·도장·카드 숫자에만 쓴다.
+   글자가 작은 폰트라 size-adjust로 키운다. 서브셋에 없는 글자는 기본 글꼴로 대체된다 (scripts/make-font.py). */
+@font-face {
+  font-family: "Gaegu";
+  src: url(fonts/gaegu-700.woff2) format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  size-adjust: 112%;
+}
+
 :root {
   --sea: #12363d;
   --text: #f6ecd6;
@@ -29,7 +40,12 @@
   --radius: calc(var(--cw) * 0.14);
   --font: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", "Nunito", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
   --num: "Arial Rounded MT Bold", ui-rounded, "Nunito", system-ui, sans-serif;
+  --display: "Gaegu", var(--font);
+  --num-card: "Gaegu", var(--num);
 }
+
+/* 손글씨 폰트를 쓰는 곳 */
+.title .name, .title small, .side-label, .btn, .ai-pick, .ai-pick select, .coin-pill, .deck-label, .stamp { font-family: var(--display); }
 
 /* 상품 색: 띠 색, 띠 위 글자, 테두리·큰 숫자, 빈 칸 점선 */
 .c-yellow { --goods: #e3ad3c; --goods-ink: #3d2a06; --goods-dark: #8f6210; --goods-soft: rgba(227, 173, 60, 0.7); }
@@ -146,7 +162,7 @@ button { font: inherit; color: inherit; }
   background: var(--goods);
   color: var(--goods-ink);
 }
-.card .n { display: flex; align-items: center; font-family: var(--num); font-weight: 800; font-size: calc(var(--band) * 0.8); line-height: 1; }
+.card .n { display: flex; align-items: center; font-family: var(--num-card); font-weight: 800; font-size: calc(var(--band) * 0.8); line-height: 1; }
 .card .band .ic { width: calc(var(--band) * 0.74); height: calc(var(--band) * 0.74); }
 .card .face {
   position: absolute;
@@ -158,9 +174,9 @@ button { font: inherit; color: inherit; }
   gap: 2px;
 }
 .card .wm { position: absolute; width: 74%; height: 74%; color: var(--goods-dark); opacity: 0.14; }
-.card .big { position: relative; font-family: var(--num); font-weight: 800; font-size: calc(var(--cw) * 0.52); line-height: 1; color: var(--goods-dark); }
+.card .big { position: relative; font-family: var(--num-card); font-weight: 800; font-size: calc(var(--cw) * 0.52); line-height: 1; color: var(--goods-dark); }
 .ic.coin.big-coin { position: relative; width: 48%; height: 48%; color: var(--accent); }
-.card .tag { position: relative; font-size: max(9px, calc(var(--cw) * 0.19)); font-weight: 700; color: var(--goods-dark); }
+.card .tag { position: relative; font-family: var(--num-card); font-size: max(9px, calc(var(--cw) * 0.19)); font-weight: 700; color: var(--goods-dark); }
 
 /* 투자 카드: 금빛 계약서 */
 .card.wager { background: #fff1c8; }

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "selfplay": "node scripts/selfplay.js"
+    "selfplay": "node scripts/selfplay.js",
+    "font": "python3 scripts/make-font.py"
   },
   "engines": {
     "node": ">=20"
