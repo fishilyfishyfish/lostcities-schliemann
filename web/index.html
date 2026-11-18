@@ -55,14 +55,13 @@
       <small>교역 상단</small>
     </div>
     <div class="totals">
-      <span class="coin-pill"><svg class="ic coin" aria-hidden="true"><use href="#g-coin"/></svg>나 <b id="total-me">0</b></span>
-      <span class="coin-pill"><svg class="ic coin" aria-hidden="true"><use href="#g-coin"/></svg>AI <b id="total-ai">0</b></span>
+      <span class="coin-pill"><svg class="ic coin" aria-hidden="true"><use href="#g-coin"/></svg><span id="name-0">나</span> <b id="total-0">0</b></span>
+      <span class="coin-pill"><svg class="ic coin" aria-hidden="true"><use href="#g-coin"/></svg><span id="name-1">AI</span> <b id="total-1">0</b></span>
     </div>
-    <label class="ai-pick">AI
-      <select id="ai-select">
-        <option value="mcts">MCTS</option>
-        <option value="rule">규칙 봇</option>
-        <option value="random">랜덤</option>
+    <label class="mode-pick">
+      <select id="mode-select" aria-label="게임 방식">
+        <option value="ai">AI 대국</option>
+        <option value="pvp">2인 플레이</option>
       </select>
     </label>
     <button id="btn-analysis" class="btn small" type="button" aria-pressed="false">분석</button>
@@ -70,7 +69,7 @@
   </header>
 
   <section class="side opp" aria-label="AI 거래소">
-    <div class="side-label">AI 거래소 <span id="opp-hand-count"></span></div>
+    <div class="side-label"><span id="opp-label">AI 거래소</span> <span class="sub" id="opp-hand-count"></span></div>
     <div class="expeditions" id="opp-exps"></div>
   </section>
 
@@ -84,7 +83,7 @@
   </section>
 
   <section class="side me" aria-label="내 거래소">
-    <div class="side-label">내 거래소</div>
+    <div class="side-label" id="me-label">내 거래소</div>
     <div class="expeditions" id="my-exps"></div>
   </section>
 
@@ -126,10 +125,25 @@
   <div class="panel">
     <h2 id="result-title" class="stamp"></h2>
     <table class="result" id="result-table"></table>
-    <div class="reveal"><div class="reveal-label">AI 남은 손패</div><div class="mini-row" id="ai-hand"></div></div>
+    <div class="reveal" id="reveal"></div>
     <div class="panel-actions">
       <button class="btn" id="btn-close" type="button">판 보기</button>
       <button class="btn primary" id="btn-again" type="button">새 게임</button>
+    </div>
+  </div>
+</div>
+
+<!-- 2인 플레이: 차례가 넘어갈 때 손패가 보이지 않게 가리는 화면. 열려 있는 동안 게임 화면은 그려지지 않는다 (body.covered). -->
+<div class="handover" id="handover" hidden role="dialog" aria-modal="true" aria-labelledby="handover-title">
+  <div class="handover-card">
+    <svg class="ic logo" aria-hidden="true"><use href="#g-compass"/></svg>
+    <h2 id="handover-title"></h2>
+    <p id="handover-sub"></p>
+    <p class="handover-last" id="handover-last"></p>
+    <button class="btn primary" id="btn-reveal" type="button"></button>
+    <div class="handover-more">
+      <button class="btn small" id="btn-cover-new" type="button">새 게임</button>
+      <button class="btn small" id="btn-cover-ai" type="button">AI 대국으로</button>
     </div>
   </div>
 </div>

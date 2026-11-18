@@ -1,4 +1,5 @@
-// UI. 게임 진행은 worker.js(엔진)가 하고, 여기서는 사람 시점 관측 객체를 그리기만 한다.
+// UI. 게임 진행은 worker.js(엔진)가 하고, 여기서는 지금 화면을 보는 사람 시점의 관측 객체를 그리기만 한다.
+// 모드: ai(사람 vs AI) / pvp(한 기기를 돌려 쓰는 2인 플레이: 차례마다 가림 화면 → 시작 버튼 → 그 사람 시점 화면).
 // cards.js / scoring.js는 카드 표기와 점수 미리보기 계산용으로만 가져온다 (순수 함수, 상태 없음).
 import { NUM_COLORS, cardColor, cardValue, isWager } from '../engine/cards.js';
 import { expeditionBreakdown, expeditionScore } from '../engine/scoring.js';
@@ -10,9 +11,14 @@ const DISCARD = 'discard';
 const DECK = 'deck';
 
 const $ = (id) => document.getElementById(id);
+// 개발·확인용: 주소에 ?ai=rule 또는 ?ai=random을 붙이면 그 AI와 둔다. 화면에는 가장 센 mcts만 보인다.
+const AI_KIND = new URLSearchParams(location.search).get('ai');
 const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
 
 const ui = {
+  mode: 'ai', // 'ai' | 'pvp'
+  names: ['나', 'AI'], // 플레이어 0, 1의 이름 (pvp: 1P, 2P)
+  analysisOpen: false, // 사용자가 분석 패널을 켰는지 (pvp에서는 숨기지만 선택은 기억)
   obs: null,
   legalMoves: [],
   final: null,
@@ -30,6 +36,9 @@ const ui = {
 worker.onmessage = (e) => {
   const msg = e.data;
   if (msg.type === 'update') {
+    ui.mode = msg.mode;
+    applyMode();
+    hideHandover();
     const prevTurn = ui.obs?.turn ?? -1;
     ui.obs = msg.obs;
     ui.legalMoves = msg.legalMoves;
@@ -44,6 +53,24 @@ worker.onmessage = (e) => {
     }
     render();
     if (ui.final) showResult();
+  } else if (msg.type === 'handover') {
+    // 가림 화면: 이전 사람의 손패가 남지 않게 관측 객체를 비운다
+    ui.mode = msg.mode;
+    applyMode();
+    ui.obs = null;
+    ui.final = null;
+    ui.tracker = null;
+    ui.legalMoves = [];
+    ui.selected = null;
+    ui.pending = null;
+    ui.suggestedDraw = null;
+    ui.analysis = null;
+    ui.analyzing = false;
+    $('overlay').hidden = true;
+    // 손패는 CSS로 가릴 뿐 아니라 DOM에서도 지운다
+    for (const id of ['hand', 'known', 'actions']) $(id).replaceChildren();
+    $('message').textContent = '';
+    showHandover(msg);
   } else if (msg.type === 'analysis') {
     ui.analyzing = false;
     if (ui.obs && msg.turn === ui.obs.turn) {
@@ -68,8 +95,48 @@ function newGame() {
   ui.analysis = null;
   ui.analyzing = false;
   ui.suggestedDraw = null;
-  worker.postMessage({ type: 'new', ai: $('ai-select').value });
+  worker.postMessage({ type: 'new', mode: $('mode-select').value, ai: AI_KIND });
 }
+
+// ---------- 모드, 가림 화면 ----------
+
+/** 지금 화면을 보는 사람의 상대 이름. */
+const oppName = () => ui.names[1 - ui.obs.player];
+
+function applyMode() {
+  const pvp = ui.mode === 'pvp';
+  ui.names = pvp ? ['1P', '2P'] : ['나', 'AI'];
+  $('name-0').textContent = ui.names[0];
+  $('name-1').textContent = ui.names[1];
+  // 분석은 AI 대국에서만: 2인 플레이에서는 상대에게 불공정한 도움이 된다
+  $('btn-analysis').hidden = pvp;
+  $('analysis').hidden = pvp || !ui.analysisOpen;
+}
+
+function showHandover(msg) {
+  const next = ui.names[msg.next];
+  $('handover-title').textContent = msg.reason === 'start' ? `${next} 먼저 시작` : `${next} 차례`;
+  $('handover-sub').textContent = `기기를 ${next}에게 넘기고, 준비되면 시작을 누르세요. 상대는 화면을 보지 마세요.`;
+  $('handover-last').textContent = msg.last ? moveSentence(ui.names[msg.last.player], msg.last) : '';
+  $('btn-reveal').textContent = `${next} 시작`;
+  document.body.classList.add('covered');
+  $('handover').hidden = false;
+  $('btn-reveal').focus();
+}
+
+function hideHandover() {
+  document.body.classList.remove('covered');
+  $('handover').hidden = true;
+}
+
+$('btn-reveal').onclick = () => worker.postMessage({ type: 'reveal' });
+// 가림 화면에서도 손패를 열지 않고 나갈 수 있게 (가림 화면 중에는 머리말이 가려져 있다)
+$('btn-cover-new').onclick = () => newGame();
+$('btn-cover-ai').onclick = () => {
+  $('mode-select').value = 'ai';
+  try { localStorage.setItem('lc-mode', 'ai'); } catch {}
+  newGame();
+};
 
 // ---------- 표기 ----------
 
@@ -100,6 +167,13 @@ function slotEl(color) {
   el.className = `slot c-${COLOR_KEYS[color]}`;
   el.innerHTML = svg(ICON[color]);
   return el;
+}
+
+/** 한 수의 공개 정보를 문장으로. h = 관측 기록 한 줄 (덱에서 뽑은 카드는 숨겨져 있다). */
+function moveSentence(name, h) {
+  const what = h.target === EXPEDITION ? '놓음' : '내놓음';
+  const from = h.draw === DECK ? '창고에서 뽑음' : `${COLOR_NAMES[h.draw]} 장터에서 가져감`;
+  return `${name}: ${cardName(h.card)} ${what}, ${from}`;
 }
 
 function fmtScore(n) {
@@ -152,8 +226,12 @@ function render() {
   // 점수
   const myTotal = v.myExps.reduce((s, e) => s + expeditionScore(e), 0);
   const oppTotal = o.oppExpeditions.reduce((s, e) => s + expeditionScore(e), 0);
-  $('total-me').textContent = fmtScore(myTotal);
-  $('total-ai').textContent = fmtScore(oppTotal);
+  const totals = o.player === 0 ? [myTotal, oppTotal] : [oppTotal, myTotal]; // 알약은 플레이어 번호 순서 고정
+  $('total-0').textContent = fmtScore(totals[0]);
+  $('total-1').textContent = fmtScore(totals[1]);
+  const pvp = ui.mode === 'pvp';
+  $('me-label').textContent = pvp ? `${ui.names[o.player]} 거래소${o.over ? '' : ' · 내 차례'}` : '내 거래소';
+  $('opp-label').textContent = `${oppName()} 거래소`;
   $('opp-hand-count').textContent = `· 손패 ${o.opponentHandCount}장`;
 
   // 탐험대
@@ -235,7 +313,7 @@ function render() {
   if (o.opponentKnownCards.length) {
     const label = document.createElement('span');
     label.className = 'known-label';
-    label.textContent = 'AI가 장터에서 가져간 카드';
+    label.textContent = `${oppName()}가 장터에서 가져간 카드`;
     known.append(label);
     const row = document.createElement('div');
     row.className = 'mini-row';
@@ -293,7 +371,7 @@ function renderStatus(lastOpp) {
     actions.append(b);
   };
 
-  const oppNote = lastOpp ? `AI: ${cardName(lastOpp.card)} ${lastOpp.target === EXPEDITION ? '놓음' : '내놓음'}, ${lastOpp.draw === DECK ? '창고에서 뽑음' : `${COLOR_NAMES[lastOpp.draw]} 장터에서 가져감`}. ` : '';
+  const oppNote = lastOpp ? `${moveSentence(oppName(), lastOpp)}. ` : '';
 
   if (ui.error) {
     msg.textContent = `오류: ${ui.error}`;
@@ -346,28 +424,41 @@ function draw(source) {
 
 function showResult() {
   if (!ui.final) return;
-  const [me, ai] = ui.final.scores;
-  const result = me.total > ai.total ? 'win' : me.total < ai.total ? 'lose' : 'draw';
-  $('result-title').textContent = { win: '승리', lose: '패배', draw: '무승부' }[result];
-  $('result-title').dataset.result = result;
+  const [s0, s1] = ui.final.scores;
+  const pvp = ui.mode === 'pvp';
+  const winner = s0.total > s1.total ? 0 : s0.total < s1.total ? 1 : -1;
+  const title = winner < 0 ? '무승부' : pvp ? `${ui.names[winner]} 승리` : winner === 0 ? '승리' : '패배';
+  $('result-title').textContent = title;
+  // 도장 색: AI 대국은 내 승패 기준, 2인 플레이는 승자가 있으면 승리색
+  $('result-title').dataset.result = winner < 0 ? 'draw' : pvp || winner === 0 ? 'win' : 'lose';
   const t = $('result-table');
   const rows = [`<tr><th></th>${COLOR_NAMES.map((n, i) => `<th class="h-${COLOR_KEYS[i]}">${n}</th>`).join('')}<th>합계</th></tr>`];
-  for (const [label, s] of [['나', me], ['AI', ai]]) {
-    rows.push(`<tr><th>${label}</th>${s.perColor.map((x) => `<td>${fmtScore(x)}</td>`).join('')}<td><b>${fmtScore(s.total)}</b></td></tr>`);
+  for (const [label, sc] of [[ui.names[0], s0], [ui.names[1], s1]]) {
+    rows.push(`<tr><th>${label}</th>${sc.perColor.map((x) => `<td>${fmtScore(x)}</td>`).join('')}<td><b>${fmtScore(sc.total)}</b></td></tr>`);
   }
   t.innerHTML = rows.join('');
-  const aiHand = $('ai-hand');
-  aiHand.replaceChildren(...ui.final.aiHand.map((c) => cardEl(c, 'mini')));
+  // 끝나면 남은 손패를 공개: AI 대국은 AI 것만 (내 것은 알고 있다), 2인 플레이는 둘 다
+  const reveal = $('reveal');
+  reveal.replaceChildren();
+  for (const p of pvp ? [0, 1] : [1]) {
+    const label = document.createElement('div');
+    label.className = 'reveal-label';
+    label.textContent = `${ui.names[p]} 남은 손패`;
+    const row = document.createElement('div');
+    row.className = 'mini-row';
+    row.append(...ui.final.hands[p].map((c) => cardEl(c, 'mini')));
+    reveal.append(label, row);
+  }
   $('overlay').hidden = false;
 }
 
 $('btn-new').onclick = newGame;
-$('ai-select').onchange = newGame;
+$('mode-select').onchange = newGame;
 try {
-  const saved = localStorage.getItem('lc-ai');
-  if (saved && [...$('ai-select').options].some((o) => o.value === saved)) $('ai-select').value = saved;
+  const saved = localStorage.getItem('lc-mode');
+  if (saved && [...$('mode-select').options].some((o) => o.value === saved)) $('mode-select').value = saved;
 } catch {}
-$('ai-select').addEventListener('change', () => { try { localStorage.setItem('lc-ai', $('ai-select').value); } catch {} });
+$('mode-select').addEventListener('change', () => { try { localStorage.setItem('lc-mode', $('mode-select').value); } catch {} });
 $('btn-again').onclick = newGame;
 $('btn-close').onclick = () => { $('overlay').hidden = true; };
 
@@ -385,7 +476,8 @@ const STATUS_LABEL = {
 };
 
 function setAnalysisOpen(open) {
-  $('analysis').hidden = !open;
+  ui.analysisOpen = open;
+  $('analysis').hidden = ui.mode === 'pvp' || !open;
   $('btn-analysis').setAttribute('aria-pressed', String(open));
   try { localStorage.setItem('lc-analysis', open ? '1' : '0'); } catch {}
   render();
