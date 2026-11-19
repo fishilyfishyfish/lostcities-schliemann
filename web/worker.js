@@ -2,10 +2,8 @@
 //
 // 두 가지 모드:
 //   ai  : 사람(player 0) vs AI(player 1). 화면을 보는 사람은 항상 player 0.
-//   pvp : 한 기기를 돌려 쓰는 2인 플레이. 숨은 정보(상대 손패)가 화면에 나오지 않게 차례마다 가림 화면을 거친다.
-//         - 수를 둔 뒤에는 관측 객체 없이 'handover'(누구 차례인지 + 방금 둔 수의 공개 정보)만 보낸다.
-//         - 다음 사람이 'reveal'을 보내야 그 사람 시점의 관측 객체('update')를 보낸다.
-//         - 라운드가 끝나면 두 손패를 모두 공개한다.
+//   pvp : 한 화면에서 번갈아 두는 2인 플레이 (플레이 방법을 보여주는 용도). 가리는 과정 없이, 수를 두면 곧바로
+//         다음 차례 사람 시점의 화면을 보낸다. 라운드가 끝나면 두 손패를 모두 공개한다.
 import { Game, legalMovesFromObservation, randomSeed, cardTracker, analyzeMoves } from '../engine/index.js';
 import { agentFactory } from '../engine/agents/index.js';
 
@@ -27,7 +25,6 @@ let game = null;
 let ai = null;
 let timer = null;
 let seed = 0;
-let awaitingReveal = false; // pvp: 가림 화면이 떠 있는 동안에는 수를 받지 않는다
 
 function finalInfo() {
   const s = game.scores();
@@ -47,18 +44,6 @@ function sendUpdate(viewer) {
     tracker: cardTracker(obs),
     final: game.over ? finalInfo() : null,
   });
-}
-
-/** pvp: 다음 사람에게 기기를 넘긴다. 손패·관측 객체는 보내지 않는다. */
-function sendHandover(next, last, reason) {
-  awaitingReveal = true;
-  postMessage({ type: 'handover', mode, seed, next, reason, last });
-}
-
-/** mover가 방금 둔 수의 공개 정보. 덱에서 뽑은 카드는 null (장터에서 가져간 카드는 공개). */
-function lastMoveOf(mover) {
-  const h = game.observe(mover).history;
-  return h[h.length - 1];
 }
 
 function scheduleAi() {
@@ -88,19 +73,14 @@ self.onmessage = (e) => {
       game = new Game({ seed, startingPlayer });
       if (mode === 'pvp') {
         ai = null;
-        sendHandover(game.current, null, 'start');
+        sendUpdate(game.current);
         return;
       }
-      awaitingReveal = false;
       ai = agentFactory(WEB_AIS[msg.ai] ?? WEB_AIS.mcts)(seed ^ 0x9e3779b9);
       sendUpdate(HUMAN);
       scheduleAi();
-    } else if (msg.type === 'reveal') {
-      if (!game || mode !== 'pvp' || game.over || !awaitingReveal) throw new Error('nothing to reveal');
-      awaitingReveal = false;
-      sendUpdate(game.current);
     } else if (msg.type === 'analyze') {
-      // 사람 시점 관측 객체만으로 분석한다. 2인 플레이에서는 쓰지 않는다 (상대에게 불공정한 도움이 되므로).
+      // 사람 시점 관측 객체만으로 분석한다. 문구가 AI 상대 기준이라 2인 플레이에서는 쓰지 않는다.
       if (!game || mode !== 'ai' || game.over || game.current !== HUMAN) {
         throw new Error('analysis is only available on your turn against the AI');
       }
@@ -115,11 +95,9 @@ self.onmessage = (e) => {
         sendUpdate(HUMAN);
         scheduleAi();
       } else {
-        if (awaitingReveal) throw new Error('hand is covered');
         const mover = game.current;
         game.play(msg.move);
-        if (game.over) sendUpdate(mover); // 끝나면 가릴 것이 없다: 결과와 두 손패를 공개
-        else sendHandover(game.current, lastMoveOf(mover), 'turn');
+        sendUpdate(game.over ? mover : game.current); // 끝나면 마지막으로 둔 사람 시점으로 결과 표시
       }
     }
   } catch (err) {

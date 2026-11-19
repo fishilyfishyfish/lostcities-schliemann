@@ -45,7 +45,7 @@
 }
 
 /* 손글씨 폰트를 쓰는 곳 */
-.title .name, .title small, .side-label, .btn, .handover-card h2, .mode-pick, .mode-pick select, .coin-pill, .deck-label, .stamp { font-family: var(--display); }
+.title .name, .title small, .side-label, .btn, .mode-pick, .mode-pick select, .coin-pill, .deck-label, .stamp { font-family: var(--display); }
 
 /* 상품 색: 띠 색, 띠 위 글자, 테두리·큰 숫자, 빈 칸 점선 */
 .c-yellow { --goods: #e3ad3c; --goods-ink: #3d2a06; --goods-dark: #8f6210; --goods-soft: rgba(227, 173, 60, 0.7); }
@@ -440,47 +440,6 @@ button { font: inherit; color: inherit; }
 .reveal-label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 .reveal .mini-row + .reveal-label { margin-top: 12px; }
 .panel-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-
-/* ---------- 2인 플레이: 가림 화면 ----------
-   열려 있는 동안(body.covered) 게임 화면은 그려지지 않는다. 이전 사람의 손패가 비치지 않게 배경도 불투명하다. */
-body.covered #app, body.covered .overlay { visibility: hidden; }
-.handover {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background:
-    radial-gradient(1100px 480px at 50% -8%, rgba(255, 255, 255, 0.08), transparent 62%),
-    radial-gradient(rgba(255, 255, 255, 0.055) 1.5px, transparent 2px) 0 0 / 22px 22px,
-    var(--sea);
-}
-.handover[hidden] { display: none; }
-.handover-card {
-  width: min(440px, 100%);
-  padding: 28px 22px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  text-align: center;
-  border-radius: 24px;
-  border: 3px solid var(--paper-edge);
-  background:
-    radial-gradient(rgba(120, 90, 40, 0.07) 1px, transparent 1.6px) 0 0 / 14px 14px,
-    var(--paper);
-  color: var(--ink);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 2px rgba(255, 255, 255, 0.5);
-}
-.handover-card .logo { width: 44px; height: 44px; color: var(--accent-dark); }
-.handover-card h2 { margin: 2px 0 0; font-size: 36px; letter-spacing: 0.04em; }
-.handover-card p { margin: 0; color: var(--ink-soft); line-height: 1.55; word-break: keep-all; }
-.handover-last { padding: 6px 12px; border-radius: 12px; background: rgba(110, 84, 40, 0.1); font-size: 13px; color: var(--ink); }
-.handover-last:empty { display: none; }
-.handover-card .btn { margin-top: 10px; min-height: 56px; padding: 0 30px; font-size: 21px; }
-.handover-card .handover-more { display: flex; gap: 8px; margin-top: 6px; }
-.handover-card .handover-more .btn { min-height: 38px; margin: 0; padding: 0 14px; font-size: 14px; }
 
 /* 상품 이름 색 (종이 위) */
 .h-yellow { color: #8f6210; }

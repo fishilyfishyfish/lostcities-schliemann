@@ -12,70 +12,53 @@ const send = (data) => self.onmessage({ data });
 const take = () => out.splice(0, out.length);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-test('2인 플레이 시작: 손패 없는 handover만 온다', () => {
+test('2인 플레이 시작: 선 플레이어 시점의 화면이 바로 온다', () => {
   take();
   send({ type: 'new', mode: 'pvp', seed: 7, startingPlayer: 1 });
   const msgs = take();
   assert.equal(msgs.length, 1);
-  assert.deepEqual(Object.keys(msgs[0]).sort(), ['last', 'mode', 'next', 'reason', 'seed', 'type']);
-  assert.equal(msgs[0].type, 'handover');
-  assert.equal(msgs[0].next, 1);
-  assert.equal(msgs[0].reason, 'start');
-  assert.equal(msgs[0].last, null);
-});
-
-test('2인 플레이: 가림 화면이 떠 있는 동안에는 수를 받지 않음, reveal 뒤에야 그 사람 시점 관측이 옴', () => {
-  take();
-  send({ type: 'new', mode: 'pvp', seed: 7, startingPlayer: 1 });
-  take();
-  send({ type: 'move', move: { card: 0, target: 'discard', draw: 'deck' } });
-  assert.match(take()[0].message, /covered/);
-  send({ type: 'reveal' });
-  const [u] = take();
+  const u = msgs[0];
   assert.equal(u.type, 'update');
+  assert.equal(u.mode, 'pvp');
   assert.equal(u.viewer, 1);
   assert.equal(u.obs.player, 1);
+  assert.equal(u.obs.current, 1);
   assert.deepEqual(u.obs.hand, new Game({ seed: 7, startingPlayer: 1 }).observe(1).hand);
   assert.ok(u.legalMoves.length > 0);
-  send({ type: 'reveal' }); // 이미 열었으면 다시 열 수 없다
-  assert.match(take()[0].message, /nothing to reveal/);
+  assert.equal(u.final, null);
 });
 
-test('2인 플레이 한 판: 매 차례 그 사람 시점, 중간 메시지에 손패·관측 없음, 끝에 결과와 두 손패', () => {
+test('2인 플레이 한 판: 수를 두면 곧바로 다음 사람 시점, 끝에 결과와 두 손패', () => {
   take();
   const ref = new Game({ seed: 11, startingPlayer: 0 });
   send({ type: 'new', mode: 'pvp', seed: 11, startingPlayer: 0 });
+  let msgs = take();
   let turns = 0;
   let final = null;
-  while (!final) {
-    const [h] = take();
-    assert.equal(h.type, 'handover');
-    assert.deepEqual(Object.keys(h).sort(), ['last', 'mode', 'next', 'reason', 'seed', 'type']);
-    assert.equal(h.next, ref.current);
-    if (h.last) {
-      assert.equal(h.last.player, 1 - h.next);
-      if (h.last.draw === 'deck') assert.equal(h.last.drawnCard, null); // 덱에서 뽑은 카드는 알려주지 않는다
-    }
-    send({ type: 'reveal' });
-    const [u] = take();
+  for (;;) {
+    assert.equal(msgs.length, 1);
+    const u = msgs[0];
     assert.equal(u.type, 'update');
-    assert.equal(u.obs.player, h.next);
-    assert.deepEqual(u.obs.hand, ref.observe(h.next).hand);
+    assert.equal(u.obs.player, ref.current); // 지금 둘 사람 시점
+    assert.equal(u.viewer, ref.current);
+    assert.deepEqual(u.obs.hand, ref.observe(ref.current).hand);
     assert.equal(u.final, null);
     const move = u.legalMoves[(turns * 7) % u.legalMoves.length];
+    const mover = ref.current;
     ref.play(move);
     send({ type: 'move', move });
     turns++;
     assert.ok(turns < 500);
+    msgs = take();
     if (ref.over) {
-      const msgs = take();
       assert.equal(msgs.length, 1);
-      assert.equal(msgs[0].type, 'update'); // 끝나면 가림 화면 없이 결과
+      assert.equal(msgs[0].type, 'update');
+      assert.equal(msgs[0].viewer, mover); // 마지막으로 둔 사람 시점
       final = msgs[0].final;
-      assert.ok(final);
-      assert.equal(msgs[0].viewer, h.next); // 마지막으로 둔 사람 시점
+      break;
     }
   }
+  assert.ok(final);
   const s = ref.scores();
   assert.deepEqual(final.scores.map((x) => x.total), [s[0].total, s[1].total]);
   assert.deepEqual(final.hands, ref.revealHands());
@@ -83,11 +66,18 @@ test('2인 플레이 한 판: 매 차례 그 사람 시점, 중간 메시지에 
   assert.equal(final.hands[1].length, 8);
 });
 
-test('2인 플레이에서는 분석을 거절', () => {
+test('2인 플레이: 합법이 아닌 수는 거절됨', () => {
   take();
   send({ type: 'new', mode: 'pvp', seed: 5, startingPlayer: 0 });
   take();
-  send({ type: 'reveal' });
+  // 손에 없는 카드
+  send({ type: 'move', move: { card: -1, target: 'discard', draw: 'deck' } });
+  assert.match(take()[0].message, /illegal move/);
+});
+
+test('2인 플레이에서는 분석을 거절', () => {
+  take();
+  send({ type: 'new', mode: 'pvp', seed: 5, startingPlayer: 0 });
   take();
   send({ type: 'analyze' });
   assert.match(take()[0].message, /against the AI/);

@@ -1,5 +1,5 @@
 // UI. 게임 진행은 worker.js(엔진)가 하고, 여기서는 지금 화면을 보는 사람 시점의 관측 객체를 그리기만 한다.
-// 모드: ai(사람 vs AI) / pvp(한 기기를 돌려 쓰는 2인 플레이: 차례마다 가림 화면 → 시작 버튼 → 그 사람 시점 화면).
+// 모드: ai(사람 vs AI) / pvp(한 화면에서 번갈아 두는 2인 플레이: 수를 두면 곧바로 다음 사람 시점으로 바뀐다).
 // cards.js / scoring.js는 카드 표기와 점수 미리보기 계산용으로만 가져온다 (순수 함수, 상태 없음).
 import { NUM_COLORS, cardColor, cardValue, isWager } from '../engine/cards.js';
 import { expeditionBreakdown, expeditionScore } from '../engine/scoring.js';
@@ -38,7 +38,6 @@ worker.onmessage = (e) => {
   if (msg.type === 'update') {
     ui.mode = msg.mode;
     applyMode();
-    hideHandover();
     const prevTurn = ui.obs?.turn ?? -1;
     ui.obs = msg.obs;
     ui.legalMoves = msg.legalMoves;
@@ -53,24 +52,6 @@ worker.onmessage = (e) => {
     }
     render();
     if (ui.final) showResult();
-  } else if (msg.type === 'handover') {
-    // 가림 화면: 이전 사람의 손패가 남지 않게 관측 객체를 비운다
-    ui.mode = msg.mode;
-    applyMode();
-    ui.obs = null;
-    ui.final = null;
-    ui.tracker = null;
-    ui.legalMoves = [];
-    ui.selected = null;
-    ui.pending = null;
-    ui.suggestedDraw = null;
-    ui.analysis = null;
-    ui.analyzing = false;
-    $('overlay').hidden = true;
-    // 손패는 CSS로 가릴 뿐 아니라 DOM에서도 지운다
-    for (const id of ['hand', 'known', 'actions']) $(id).replaceChildren();
-    $('message').textContent = '';
-    showHandover(msg);
   } else if (msg.type === 'analysis') {
     ui.analyzing = false;
     if (ui.obs && msg.turn === ui.obs.turn) {
@@ -98,7 +79,7 @@ function newGame() {
   worker.postMessage({ type: 'new', mode: $('mode-select').value, ai: AI_KIND });
 }
 
-// ---------- 모드, 가림 화면 ----------
+// ---------- 모드 ----------
 
 /** 지금 화면을 보는 사람의 상대 이름. */
 const oppName = () => ui.names[1 - ui.obs.player];
@@ -108,35 +89,10 @@ function applyMode() {
   ui.names = pvp ? ['1P', '2P'] : ['나', 'AI'];
   $('name-0').textContent = ui.names[0];
   $('name-1').textContent = ui.names[1];
-  // 분석은 AI 대국에서만: 2인 플레이에서는 상대에게 불공정한 도움이 된다
+  // 분석 문구가 AI 상대 기준이라 AI 대국에서만 쓴다
   $('btn-analysis').hidden = pvp;
   $('analysis').hidden = pvp || !ui.analysisOpen;
 }
-
-function showHandover(msg) {
-  const next = ui.names[msg.next];
-  $('handover-title').textContent = msg.reason === 'start' ? `${next} 먼저 시작` : `${next} 차례`;
-  $('handover-sub').textContent = `기기를 ${next}에게 넘기고, 준비되면 시작을 누르세요. 상대는 화면을 보지 마세요.`;
-  $('handover-last').textContent = msg.last ? moveSentence(ui.names[msg.last.player], msg.last) : '';
-  $('btn-reveal').textContent = `${next} 시작`;
-  document.body.classList.add('covered');
-  $('handover').hidden = false;
-  $('btn-reveal').focus();
-}
-
-function hideHandover() {
-  document.body.classList.remove('covered');
-  $('handover').hidden = true;
-}
-
-$('btn-reveal').onclick = () => worker.postMessage({ type: 'reveal' });
-// 가림 화면에서도 손패를 열지 않고 나갈 수 있게 (가림 화면 중에는 머리말이 가려져 있다)
-$('btn-cover-new').onclick = () => newGame();
-$('btn-cover-ai').onclick = () => {
-  $('mode-select').value = 'ai';
-  try { localStorage.setItem('lc-mode', 'ai'); } catch {}
-  newGame();
-};
 
 // ---------- 표기 ----------
 
@@ -394,7 +350,7 @@ function renderStatus(lastOpp) {
     button('장터에 내놓기', () => choose(DISCARD), '', !canTarget(c, DISCARD));
     button('취소', () => { ui.selected = null; render(); });
   } else {
-    msg.textContent = `${oppNote}카드를 고르세요`;
+    msg.textContent = `${ui.mode === 'pvp' ? `${ui.names[o.player]} 차례. ` : ''}${oppNote}카드를 고르세요`;
   }
 }
 
